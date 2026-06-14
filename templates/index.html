@@ -6,337 +6,981 @@
 <title>文献综述 Agent 工具</title>
 <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 <style>
-  :root {
-    --primary: #4F46E5;
-    --primary-dark: #3730A3;
-    --primary-light: #EEF2FF;
-    --bg: #F8FAFC;
-    --surface: #FFFFFF;
-    --border: #E2E8F0;
-    --text: #1E293B;
-    --text-secondary: #64748B;
-    --text-muted: #94A3B8;
-    --success: #10B981;
-    --warning: #F59E0B;
-    --error: #EF4444;
-    --radius: 10px;
-    --shadow: 0 1px 3px 0 rgb(0 0 0 / 0.06), 0 1px 2px -1px rgb(0 0 0 / 0.06);
-    --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.07), 0 2px 4px -2px rgb(0 0 0 / 0.05);
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
-  }
+/* ============================================================
+   CSS Custom Properties — Light & Dark Themes
+   ============================================================ */
+:root {
+  --primary: #4F46E5;
+  --primary-hover: #4338CA;
+  --primary-light: #EEF2FF;
+  --primary-glow: rgba(79,70,229,0.25);
+  --success: #10B981;
+  --success-light: #D1FAE5;
+  --warning: #F59E0B;
+  --warning-light: #FEF3C7;
+  --error: #EF4444;
+  --error-light: #FEE2E2;
 
-  * { margin: 0; padding: 0; box-sizing: border-box; }
+  --bg: #F1F5F9;
+  --bg-alt: #F8FAFC;
+  --surface: #FFFFFF;
+  --surface-hover: #F8FAFC;
+  --border: #E2E8F0;
+  --border-light: #F1F5F9;
 
-  body {
-    background: var(--bg);
-    color: var(--text);
-    height: 100vh;
-    display: flex;
-    overflow: hidden;
-  }
+  --text: #0F172A;
+  --text-secondary: #475569;
+  --text-muted: #94A3B8;
+  --text-inverse: #FFFFFF;
 
-  /* ========== SIDEBAR ========== */
-  .sidebar {
-    width: 340px;
-    min-width: 340px;
-    background: var(--surface);
-    border-right: 1px solid var(--border);
-    display: flex;
-    flex-direction: column;
-    z-index: 10;
-    box-shadow: var(--shadow-md);
-  }
+  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  --shadow: 0 1px 3px 0 rgb(0 0 0 / 0.06), 0 1px 2px -1px rgb(0 0 0 / 0.06);
+  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.07), 0 2px 4px -2px rgb(0 0 0 / 0.05);
+  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.08), 0 4px 6px -4px rgb(0 0 0 / 0.05);
 
-  .sidebar-header {
-    padding: 24px 20px 16px;
-    border-bottom: 1px solid var(--border);
-    background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
-    color: white;
-  }
-  .sidebar-header h1 {
-    font-size: 1.15rem;
-    font-weight: 700;
-    letter-spacing: -0.01em;
-  }
-  .sidebar-header p {
-    font-size: 0.75rem;
-    opacity: 0.75;
-    margin-top: 2px;
-  }
+  --radius-sm: 6px;
+  --radius: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 20px;
 
-  .sidebar-body {
-    flex: 1;
-    overflow-y: auto;
-    padding: 20px;
-  }
+  --transition: 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-slow: 0.35s cubic-bezier(0.4, 0, 0.2, 1);
 
-  .form-group {
-    margin-bottom: 18px;
-  }
-  .form-group label {
-    display: block;
-    font-size: 0.8rem;
-    font-weight: 600;
-    color: var(--text-secondary);
-    margin-bottom: 6px;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-  }
-  .form-group input, .form-group select {
-    width: 100%;
-    padding: 10px 12px;
-    border: 1.5px solid var(--border);
-    border-radius: 8px;
-    font-size: 0.9rem;
-    color: var(--text);
-    background: var(--bg);
-    transition: all 0.15s;
-    font-family: inherit;
-  }
-  .form-group input:focus, .form-group select:focus {
-    outline: none;
-    border-color: var(--primary);
-    box-shadow: 0 0 0 3px var(--primary-light);
-    background: var(--surface);
-  }
-  .form-row {
-    display: flex;
-    gap: 12px;
-  }
-  .form-row .form-group { flex: 1; }
+  --font: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans SC", sans-serif;
+  --font-mono: "SF Mono", "Fira Code", "Cascadia Code", Consolas, monospace;
+}
 
-  .toggle-row {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 8px 0;
-  }
-  .toggle-row span {
-    font-size: 0.85rem;
-    color: var(--text-secondary);
-  }
-  .toggle-switch {
-    position: relative;
-    width: 44px; height: 24px;
-  }
-  .toggle-switch input { opacity: 0; width: 0; height: 0; }
-  .toggle-slider {
-    position: absolute; inset: 0;
-    background: #CBD5E1;
-    border-radius: 24px;
-    cursor: pointer;
-    transition: 0.2s;
-  }
-  .toggle-slider::before {
-    content: "";
-    position: absolute;
-    width: 18px; height: 18px;
-    left: 3px; bottom: 3px;
-    background: white;
-    border-radius: 50%;
-    transition: 0.2s;
-  }
-  .toggle-switch input:checked + .toggle-slider { background: var(--primary); }
-  .toggle-switch input:checked + .toggle-slider::before { transform: translateX(20px); }
+/* Dark theme */
+[data-theme="dark"] {
+  --bg: #0F172A;
+  --bg-alt: #1E293B;
+  --surface: #1E293B;
+  --surface-hover: #273449;
+  --border: #334155;
+  --border-light: #1E293B;
 
-  .btn {
-    width: 100%;
-    padding: 12px;
-    border: none;
-    border-radius: 8px;
-    font-size: 0.95rem;
-    font-weight: 600;
-    cursor: pointer;
-    transition: all 0.15s;
-    font-family: inherit;
-    letter-spacing: 0.01em;
-  }
-  .btn-primary {
-    background: var(--primary);
-    color: white;
-  }
-  .btn-primary:hover { background: var(--primary-dark); transform: translateY(-1px); box-shadow: 0 4px 12px rgba(79,70,229,0.3); }
-  .btn-primary:disabled { background: #A5B4FC; cursor: not-allowed; transform: none; box-shadow: none; }
-  .btn-secondary {
-    background: var(--bg);
-    color: var(--text-secondary);
-    border: 1px solid var(--border);
-    margin-top: 8px;
-  }
-  .btn-secondary:hover { background: var(--border); }
+  --text: #F1F5F9;
+  --text-secondary: #94A3B8;
+  --text-muted: #64748B;
 
-  /* ========== MAIN ========== */
-  .main {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-  }
+  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.3);
+  --shadow: 0 1px 3px 0 rgb(0 0 0 / 0.4), 0 1px 2px -1px rgb(0 0 0 / 0.3);
+  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.4), 0 2px 4px -2px rgb(0 0 0 / 0.3);
+  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.5), 0 4px 6px -4px rgb(0 0 0 / 0.3);
 
-  /* Progress bar */
-  .progress-bar-wrap {
-    height: 4px;
-    background: var(--border);
-    position: relative;
-  }
-  .progress-bar-fill {
-    height: 100%;
-    background: linear-gradient(90deg, var(--primary), #818CF8);
-    transition: width 0.5s ease;
-    border-radius: 0 2px 2px 0;
-    width: 0%;
-  }
-  .progress-status {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 10px 24px;
-    background: var(--surface);
-    border-bottom: 1px solid var(--border);
-    font-size: 0.8rem;
-    color: var(--text-secondary);
-  }
-  .progress-status .step-text { display: flex; align-items: center; gap: 8px; }
-  .spinner {
-    width: 16px; height: 16px;
-    border: 2px solid var(--border);
-    border-top-color: var(--primary);
-    border-radius: 50%;
-    animation: spin 0.6s linear infinite;
-    display: none;
-  }
-  .spinner.active { display: inline-block; }
-  @keyframes spin { to { transform: rotate(360deg); } }
+  --primary-light: #1E1B4B;
+  --primary-glow: rgba(129,140,248,0.3);
+}
 
-  /* Content area */
-  .content { flex: 1; overflow: hidden; display: flex; flex-direction: column; }
+/* ============================================================
+   Base & Reset
+   ============================================================ */
+* { margin: 0; padding: 0; box-sizing: border-box; }
 
-  /* Tabs */
-  .tabs {
-    display: flex;
-    gap: 0;
-    background: var(--surface);
-    border-bottom: 1px solid var(--border);
-    padding: 0 24px;
-  }
-  .tab {
-    padding: 14px 20px;
-    font-size: 0.85rem;
-    font-weight: 500;
-    color: var(--text-secondary);
-    cursor: pointer;
-    border-bottom: 2px solid transparent;
-    transition: all 0.15s;
-    background: none;
-    border-top: none; border-left: none; border-right: none;
-    font-family: inherit;
-  }
-  .tab:hover { color: var(--text); }
-  .tab.active { color: var(--primary); border-bottom-color: var(--primary); font-weight: 600; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  height: 100vh;
+  display: flex;
+  overflow: hidden;
+  font-family: var(--font);
+  transition: background var(--transition-slow), color var(--transition-slow);
+  -webkit-font-smoothing: antialiased;
+}
 
-  .tab-content { flex: 1; overflow-y: auto; padding: 24px; display: none; }
-  .tab-content.active { display: block; }
+a { color: var(--primary); text-decoration: none; }
+a:hover { text-decoration: underline; }
 
-  /* Review markdown styling */
-  .markdown-body { max-width: 860px; line-height: 1.85; }
-  .markdown-body h1 { font-size: 1.5rem; margin: 28px 0 12px; color: var(--text); border-bottom: 1px solid var(--border); padding-bottom: 8px; }
-  .markdown-body h2 { font-size: 1.2rem; margin: 24px 0 10px; color: var(--primary-dark); }
-  .markdown-body h3 { font-size: 1.05rem; margin: 20px 0 8px; }
-  .markdown-body p { margin: 10px 0; }
-  .markdown-body table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 0.85rem; }
-  .markdown-body th { background: var(--primary); color: white; padding: 10px 12px; text-align: left; font-weight: 600; }
-  .markdown-body td { padding: 8px 12px; border-bottom: 1px solid var(--border); }
-  .markdown-body tr:nth-child(even) td { background: #F8FAFC; }
-  .markdown-body strong { color: var(--text); }
-  .markdown-body ul, .markdown-body ol { padding-left: 24px; margin: 10px 0; }
-  .markdown-body li { margin: 4px 0; }
+/* Custom scrollbar */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
 
-  /* Image panels */
-  .img-panel { text-align: center; margin: 16px 0; }
-  .img-panel img { max-width: 100%; border-radius: var(--radius); box-shadow: var(--shadow-md); border: 1px solid var(--border); }
-  .img-panel .caption { font-size: 0.8rem; color: var(--text-muted); margin-top: 8px; }
+/* ============================================================
+   SIDEBAR
+   ============================================================ */
+.sidebar {
+  width: 350px;
+  min-width: 350px;
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  z-index: 10;
+  box-shadow: var(--shadow-md);
+  transition: background var(--transition-slow), border-color var(--transition-slow);
+}
 
-  /* Stats cards */
-  .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-bottom: 20px; }
-  .stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; text-align: center; }
-  .stat-card .stat-value { font-size: 1.6rem; font-weight: 700; color: var(--primary); }
-  .stat-card .stat-label { font-size: 0.75rem; color: var(--text-muted); margin-top: 2px; }
+.sidebar-header {
+  padding: 20px 22px 16px;
+  background: linear-gradient(135deg, var(--primary) 0%, #6366F1 50%, #3730A3 100%);
+  color: white;
+  position: relative;
+  overflow: hidden;
+}
+.sidebar-header::after {
+  content: "";
+  position: absolute;
+  top: -50%; right: -30%;
+  width: 180px; height: 180px;
+  background: rgba(255,255,255,0.06);
+  border-radius: 50%;
+  pointer-events: none;
+}
+.sidebar-header h1 {
+  font-size: 1.05rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  position: relative;
+  z-index: 1;
+}
+.sidebar-header .subtitle {
+  font-size: 0.7rem;
+  opacity: 0.7;
+  margin-top: 2px;
+  position: relative;
+  z-index: 1;
+}
+.sidebar-header .header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  position: relative;
+  z-index: 1;
+}
 
-  /* Paper list */
-  .paper-card {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    padding: 16px;
-    margin-bottom: 10px;
-    transition: box-shadow 0.15s;
-  }
-  .paper-card:hover { box-shadow: var(--shadow-md); }
-  .paper-card .paper-index { display: inline-block; background: var(--primary); color: white; width: 26px; height: 26px; text-align: center; line-height: 26px; border-radius: 6px; font-size: 0.75rem; font-weight: 700; margin-right: 10px; }
-  .paper-card .paper-title { font-weight: 600; font-size: 0.95rem; }
-  .paper-card .paper-meta { font-size: 0.78rem; color: var(--text-secondary); margin-top: 4px; }
-  .paper-card .paper-meta span { margin-right: 14px; }
-  .paper-card .paper-innovation { font-size: 0.82rem; color: var(--text-secondary); margin-top: 6px; padding-left: 36px; }
-  .badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 0.72rem; font-weight: 600; }
-  .badge-code { background: #D1FAE5; color: #065F46; }
-  .badge-cat { background: var(--primary-light); color: var(--primary-dark); }
+/* Theme toggle */
+.theme-toggle {
+  background: rgba(255,255,255,0.15);
+  border: 1px solid rgba(255,255,255,0.25);
+  color: white;
+  width: 32px; height: 32px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--transition);
+}
+.theme-toggle:hover { background: rgba(255,255,255,0.25); }
 
-  /* Empty state */
-  .empty-state {
-    display: flex; flex-direction: column; align-items: center; justify-content: center;
-    height: 100%; color: var(--text-muted); text-align: center; padding: 40px;
-  }
-  .empty-state .icon { font-size: 4rem; margin-bottom: 16px; opacity: 0.4; }
-  .empty-state h3 { font-size: 1.1rem; color: var(--text-secondary); margin-bottom: 8px; }
-  .empty-state p { font-size: 0.85rem; max-width: 360px; }
+.sidebar-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
 
-  @media (max-width: 768px) {
-    body { flex-direction: column; }
-    .sidebar { width: 100%; min-width: 0; max-height: 50vh; }
-  }
+/* Form elements */
+.form-section { margin-bottom: 2px; }
+.form-section-title {
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 10px;
+  margin-top: 8px;
+}
+
+.form-group { margin-bottom: 14px; }
+.form-group label {
+  display: block;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin-bottom: 5px;
+}
+.form-group input, .form-group select {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 0.88rem;
+  color: var(--text);
+  background: var(--bg);
+  transition: all var(--transition);
+  font-family: var(--font);
+}
+.form-group input:focus, .form-group select:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px var(--primary-light);
+  background: var(--surface);
+}
+.form-group input::placeholder { color: var(--text-muted); }
+.form-row {
+  display: flex;
+  gap: 12px;
+}
+.form-row .form-group { flex: 1; }
+
+/* Example topic chips */
+.topic-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+.topic-chip {
+  font-size: 0.72rem;
+  padding: 4px 10px;
+  border-radius: 20px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all var(--transition);
+  white-space: nowrap;
+  font-family: var(--font);
+}
+.topic-chip:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+  background: var(--primary-light);
+}
+
+/* Toggle switches */
+.toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 7px 0;
+}
+.toggle-row .toggle-label {
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.toggle-row .toggle-hint {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  margin-left: 4px;
+}
+.toggle-switch {
+  position: relative;
+  width: 44px; height: 24px;
+  flex-shrink: 0;
+}
+.toggle-switch input { opacity: 0; width: 0; height: 0; }
+.toggle-slider {
+  position: absolute; inset: 0;
+  background: #CBD5E1;
+  border-radius: 24px;
+  cursor: pointer;
+  transition: var(--transition);
+}
+.toggle-slider::before {
+  content: "";
+  position: absolute;
+  width: 18px; height: 18px;
+  left: 3px; bottom: 3px;
+  background: white;
+  border-radius: 50%;
+  transition: var(--transition);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.15);
+}
+.toggle-switch input:checked + .toggle-slider { background: var(--primary); }
+.toggle-switch input:checked + .toggle-slider::before { transform: translateX(20px); }
+
+/* Buttons */
+.btn {
+  width: 100%;
+  padding: 11px;
+  border: none;
+  border-radius: var(--radius-sm);
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition);
+  font-family: var(--font);
+  letter-spacing: 0.01em;
+}
+.btn-primary {
+  background: linear-gradient(135deg, var(--primary) 0%, #6366F1 100%);
+  color: white;
+  box-shadow: 0 2px 8px var(--primary-glow);
+}
+.btn-primary:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px var(--primary-glow);
+}
+.btn-primary:active { transform: translateY(0); }
+.btn-primary:disabled {
+  background: #A5B4FC;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+.btn-ghost {
+  background: transparent;
+  color: var(--text-secondary);
+  border: 1px solid var(--border);
+  margin-top: 6px;
+}
+.btn-ghost:hover { background: var(--bg); border-color: var(--text-muted); }
+
+/* Collapsible advanced section */
+.advanced-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 8px 0;
+  border: none;
+  background: none;
+  font-family: var(--font);
+  transition: color var(--transition);
+  width: 100%;
+}
+.advanced-toggle:hover { color: var(--text-secondary); }
+.advanced-toggle .arrow {
+  font-size: 0.6rem;
+  transition: transform var(--transition);
+  display: inline-block;
+}
+.advanced-toggle.open .arrow { transform: rotate(90deg); }
+.advanced-section {
+  overflow: hidden;
+  transition: max-height var(--transition-slow), opacity var(--transition);
+  max-height: 0;
+  opacity: 0;
+}
+.advanced-section.open { max-height: 200px; opacity: 1; }
+
+/* Sidebar footer */
+.sidebar-footer {
+  padding: 12px 20px;
+  border-top: 1px solid var(--border);
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  transition: border-color var(--transition-slow);
+}
+.sidebar-footer .status-dot {
+  display: inline-block;
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  margin-right: 4px;
+}
+.sidebar-footer .status-dot.on { background: var(--success); }
+.sidebar-footer .status-dot.off { background: var(--error); }
+
+/* ============================================================
+   MAIN AREA
+   ============================================================ */
+.main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--bg);
+  transition: background var(--transition-slow);
+}
+
+/* Progress bar */
+.progress-bar-wrap {
+  height: 3px;
+  background: var(--border);
+  position: relative;
+  transition: background var(--transition-slow);
+}
+.progress-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--primary), #818CF8, #A78BFA);
+  background-size: 200% 100%;
+  animation: shimmer 2s ease-in-out infinite;
+  transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+  border-radius: 0 2px 2px 0;
+  width: 0%;
+}
+@keyframes shimmer {
+  0%, 100% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+}
+
+/* Status bar */
+.progress-status {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 24px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  transition: background var(--transition-slow), border-color var(--transition-slow);
+}
+.progress-status .step-text { display: flex; align-items: center; gap: 8px; }
+.pulse-dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: var(--primary);
+  display: none;
+  animation: pulse 1.2s ease-in-out infinite;
+}
+.pulse-dot.active { display: inline-block; }
+@keyframes pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.4; transform: scale(1.5); }
+}
+
+/* Pipeline steps */
+.pipeline-steps {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  padding: 12px 24px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  overflow-x: auto;
+  transition: background var(--transition-slow), border-color var(--transition-slow);
+  display: none;
+}
+.pipeline-steps.visible { display: flex; }
+.pipeline-step {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.73rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+  transition: color var(--transition);
+}
+.pipeline-step .step-icon {
+  width: 22px; height: 22px;
+  border-radius: 50%;
+  border: 2px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.65rem;
+  transition: all var(--transition);
+  flex-shrink: 0;
+}
+.pipeline-step.done { color: var(--success); }
+.pipeline-step.done .step-icon {
+  border-color: var(--success);
+  background: var(--success);
+  color: white;
+}
+.pipeline-step.active { color: var(--primary); font-weight: 600; }
+.pipeline-step.active .step-icon {
+  border-color: var(--primary);
+  background: var(--primary);
+  color: white;
+  animation: pulse 1.2s ease-in-out infinite;
+}
+.pipeline-arrow {
+  color: var(--border);
+  margin: 0 8px;
+  font-size: 0.6rem;
+  flex-shrink: 0;
+  transition: color var(--transition);
+}
+.pipeline-step.done + .pipeline-arrow { color: var(--success); }
+
+/* Content area */
+.content { flex: 1; overflow: hidden; display: flex; flex-direction: column; }
+
+/* ============================================================
+   TABS
+   ============================================================ */
+.tabs {
+  display: flex;
+  gap: 0;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  padding: 0 20px;
+  transition: background var(--transition-slow), border-color var(--transition-slow);
+}
+.tab {
+  padding: 13px 18px;
+  font-size: 0.82rem;
+  font-weight: 500;
+  color: var(--text-muted);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  transition: all var(--transition);
+  background: none;
+  border-top: none; border-left: none; border-right: none;
+  font-family: var(--font);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.tab:hover { color: var(--text-secondary); }
+.tab.active { color: var(--primary); border-bottom-color: var(--primary); font-weight: 600; }
+.tab .tab-icon { font-size: 0.9rem; }
+.tab .tab-badge {
+  background: var(--primary-light);
+  color: var(--primary);
+  font-size: 0.65rem;
+  padding: 1px 7px;
+  border-radius: 10px;
+  font-weight: 600;
+}
+
+.tab-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 24px;
+  display: none;
+  animation: fadeIn 0.25s ease;
+}
+.tab-content.active { display: block; }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+
+/* ============================================================
+   MARKDOWN BODY (Review tab)
+   ============================================================ */
+.markdown-body { width: 66.67%; margin: 0 auto; line-height: 1.9; }
+.markdown-body h1 { font-size: 1.5rem; margin: 32px 0 14px; color: var(--text); border-bottom: 1px solid var(--border); padding-bottom: 10px; }
+.markdown-body h2 { font-size: 1.2rem; margin: 28px 0 12px; color: var(--primary); }
+.markdown-body h3 { font-size: 1.05rem; margin: 22px 0 10px; }
+.markdown-body p { margin: 12px 0; }
+.markdown-body table { width: 100%; border-collapse: collapse; margin: 18px 0; font-size: 0.85rem; border-radius: var(--radius-sm); overflow: hidden; }
+.markdown-body th { background: var(--primary); color: white; padding: 10px 14px; text-align: left; font-weight: 600; }
+.markdown-body td { padding: 9px 14px; border-bottom: 1px solid var(--border); background: var(--surface); }
+.markdown-body tr:last-child td { border-bottom: none; }
+.markdown-body tr:nth-child(even) td { background: var(--bg-alt); }
+.markdown-body strong { color: var(--text); }
+.markdown-body ul, .markdown-body ol { padding-left: 24px; margin: 10px 0; }
+.markdown-body li { margin: 5px 0; }
+.markdown-body blockquote {
+  border-left: 4px solid var(--primary);
+  padding: 8px 16px;
+  margin: 16px 0;
+  background: var(--primary-light);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  color: var(--text-secondary);
+}
+.markdown-body code {
+  background: var(--bg);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-family: var(--font-mono);
+  font-size: 0.85em;
+}
+.markdown-body pre {
+  background: #1E293B;
+  color: #E2E8F0;
+  padding: 16px;
+  border-radius: var(--radius-sm);
+  overflow-x: auto;
+  margin: 16px 0;
+}
+.markdown-body pre code { background: none; padding: 0; color: inherit; }
+
+/* ============================================================
+   STAT CARDS
+   ============================================================ */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 12px;
+  margin-bottom: 20px;
+}
+.stat-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 18px 16px;
+  text-align: center;
+  transition: all var(--transition);
+}
+.stat-card:hover {
+  box-shadow: var(--shadow-md);
+  border-color: var(--primary);
+  transform: translateY(-2px);
+}
+.stat-card .stat-value { font-size: 1.8rem; font-weight: 700; color: var(--primary); }
+.stat-card .stat-label { font-size: 0.73rem; color: var(--text-muted); margin-top: 4px; }
+
+/* ============================================================
+   PAPER CARDS
+   ============================================================ */
+.paper-search-bar {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.paper-search-bar input {
+  flex: 1;
+  min-width: 200px;
+  padding: 9px 12px;
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 0.85rem;
+  background: var(--surface);
+  color: var(--text);
+  font-family: var(--font);
+  transition: all var(--transition);
+}
+.paper-search-bar input:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px var(--primary-light);
+}
+.category-chips { display: flex; gap: 6px; flex-wrap: wrap; }
+.cat-chip {
+  font-size: 0.7rem;
+  padding: 4px 10px;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all var(--transition);
+  font-family: var(--font);
+  white-space: nowrap;
+}
+.cat-chip:hover, .cat-chip.active {
+  background: var(--primary);
+  color: white;
+  border-color: var(--primary);
+}
+
+.paper-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px 18px;
+  margin-bottom: 10px;
+  cursor: pointer;
+  transition: all var(--transition);
+  position: relative;
+}
+.paper-card:hover {
+  box-shadow: var(--shadow-md);
+  border-color: var(--primary);
+  transform: translateY(-1px);
+}
+.paper-card .paper-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+.paper-card .paper-index {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--primary);
+  color: white;
+  min-width: 28px; height: 28px;
+  border-radius: var(--radius-sm);
+  font-size: 0.75rem;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+.paper-card .paper-info { flex: 1; min-width: 0; }
+.paper-card .paper-title { font-weight: 600; font-size: 0.93rem; color: var(--text); line-height: 1.4; }
+.paper-card .paper-meta {
+  font-size: 0.76rem;
+  color: var(--text-secondary);
+  margin-top: 5px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  align-items: center;
+}
+.paper-card .paper-meta span { white-space: nowrap; }
+.badge {
+  display: inline-block;
+  padding: 2px 9px;
+  border-radius: 12px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.badge-code { background: var(--success-light); color: #065F46; }
+.badge-cat { background: var(--primary-light); color: var(--primary); }
+.badge-no-code { background: #F1F5F9; color: #94A3B8; }
+
+.paper-card .paper-details {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height var(--transition-slow), padding var(--transition), opacity var(--transition);
+  opacity: 0;
+}
+.paper-card.expanded .paper-details {
+  max-height: 300px;
+  opacity: 1;
+  padding-top: 14px;
+  margin-top: 6px;
+  border-top: 1px solid var(--border);
+}
+.paper-details .detail-row {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  margin-bottom: 8px;
+  line-height: 1.5;
+}
+.paper-details .detail-label {
+  font-weight: 600;
+  color: var(--text);
+  font-size: 0.73rem;
+}
+.paper-details .code-links { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 4px; }
+.paper-details .code-link {
+  font-size: 0.73rem;
+  padding: 3px 10px;
+  border-radius: 14px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--primary);
+  text-decoration: none;
+  transition: all var(--transition);
+}
+.paper-details .code-link:hover { background: var(--primary-light); text-decoration: none; }
+
+.paper-expand-hint {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  margin-top: 4px;
+}
+.paper-card.expanded .paper-expand-hint { color: var(--primary); }
+
+/* ============================================================
+   IMAGE PANELS
+   ============================================================ */
+.img-panel { text-align: center; margin: 16px 0; }
+.img-panel img, .img-panel object {
+  max-width: 100%;
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-md);
+  border: 1px solid var(--border);
+  background: white;
+}
+.img-panel .caption { font-size: 0.8rem; color: var(--text-muted); margin-top: 10px; }
+
+/* ============================================================
+   DOWNLOAD BUTTONS
+   ============================================================ */
+.download-bar {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 20px;
+  width: 66.67%;
+  margin-left: auto;
+  margin-right: auto;
+}
+.btn-download {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all var(--transition);
+  font-family: var(--font);
+  text-decoration: none;
+}
+.btn-download:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+  background: var(--primary-light);
+  text-decoration: none;
+}
+.btn-copy {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  font-size: 0.7rem;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all var(--transition);
+  font-family: var(--font);
+}
+.btn-copy:hover { border-color: var(--primary); color: var(--primary); }
+.btn-copy.copied { border-color: var(--success); color: var(--success); background: var(--success-light); }
+
+/* ============================================================
+   EMPTY STATE
+   ============================================================ */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  text-align: center;
+  padding: 40px;
+}
+.empty-state .hero-icon {
+  font-size: 5rem;
+  margin-bottom: 20px;
+  animation: float 3s ease-in-out infinite;
+}
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-12px); }
+}
+.empty-state h3 { font-size: 1.25rem; color: var(--text); margin-bottom: 8px; font-weight: 700; }
+.empty-state p { font-size: 0.85rem; color: var(--text-muted); max-width: 400px; }
+
+.feature-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+  margin-top: 28px;
+  max-width: 520px;
+}
+.feature-item {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 18px 14px;
+  transition: all var(--transition);
+}
+.feature-item:hover { box-shadow: var(--shadow-md); transform: translateY(-2px); }
+.feature-item .feat-icon { font-size: 1.6rem; margin-bottom: 6px; }
+.feature-item .feat-title { font-size: 0.78rem; font-weight: 600; color: var(--text); }
+.feature-item .feat-desc { font-size: 0.7rem; color: var(--text-muted); margin-top: 2px; }
+
+/* ============================================================
+   TOAST NOTIFICATIONS
+   ============================================================ */
+.toast-container {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  pointer-events: none;
+}
+.toast {
+  padding: 12px 18px;
+  border-radius: var(--radius-sm);
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: white;
+  box-shadow: var(--shadow-lg);
+  pointer-events: auto;
+  animation: slideIn 0.3s ease, slideOut 0.3s ease 3.2s forwards;
+  max-width: 380px;
+  font-family: var(--font);
+}
+.toast-error { background: var(--error); }
+.toast-success { background: var(--success); }
+.toast-info { background: var(--primary); }
+@keyframes slideIn { from { opacity: 0; transform: translateX(100%); } to { opacity: 1; transform: translateX(0); } }
+@keyframes slideOut { from { opacity: 1; transform: translateX(0); } to { opacity: 0; transform: translateX(100%); } }
+
+/* ============================================================
+   RESPONSIVE
+   ============================================================ */
+@media (max-width: 860px) {
+  body { flex-direction: column; }
+  .sidebar { width: 100%; min-width: 0; max-height: 45vh; }
+  .feature-grid { grid-template-columns: 1fr; }
+  .pipeline-steps { flex-wrap: wrap; gap: 6px; }
+  .pipeline-arrow { display: none; }
+}
+
+@media (max-width: 500px) {
+  .tabs { padding: 0 8px; overflow-x: auto; }
+  .tab { padding: 12px 10px; font-size: 0.72rem; gap: 3px; }
+  .tab-content { padding: 14px; }
+  .stats-grid { grid-template-columns: repeat(2, 1fr); }
+}
 </style>
 </head>
 <body>
+
+<!-- ====== TOAST CONTAINER ====== -->
+<div class="toast-container" id="toast-container"></div>
 
 <!-- ====== SIDEBAR ====== -->
 <aside class="sidebar">
   <div class="sidebar-header">
     <h1>📚 文献综述 Agent</h1>
-    <p>AI-Powered Literature Review Tool</p>
+    <p class="subtitle">AI-Powered Literature Review</p>
+    <div class="header-actions">
+      <button class="theme-toggle" id="btn-theme" title="切换深色/浅色模式" onclick="toggleTheme()">🌙</button>
+      <span style="font-size:0.7rem;opacity:0.7;">Ctrl+Enter 开始</span>
+    </div>
   </div>
+
   <div class="sidebar-body">
-    <div class="form-group">
-      <label>🔍 研究主题</label>
-      <input type="text" id="input-topic" placeholder="例如: Transformer attention mechanisms" value="Transformer attention mechanism">
-    </div>
-    <div class="form-row">
-      <div class="form-group">
-        <label>📄 论文数量</label>
-        <input type="number" id="input-max-papers" value="15" min="5" max="50">
+    <!-- Topic input -->
+    <div class="form-section">
+      <div class="form-section-title">🔍 研究主题</div>
+      <div class="form-group" style="margin-bottom:8px;">
+        <input type="text" id="input-topic" placeholder="输入研究主题，例如: Transformer attention mechanisms" value="Transformer attention mechanism">
       </div>
-      <div class="form-group">
-        <label>📅 年份范围</label>
-        <input type="number" id="input-year-range" value="5" min="1" max="10">
+      <div class="topic-chips">
+        <button class="topic-chip" onclick="setTopic('Transformer attention mechanisms')">Transformer 注意力</button>
+        <button class="topic-chip" onclick="setTopic('Graph Neural Networks for drug discovery')">GNN 药物发现</button>
+        <button class="topic-chip" onclick="setTopic('Diffusion models for image generation')">扩散模型</button>
+        <button class="topic-chip" onclick="setTopic('Large Language Models reasoning')">LLM 推理</button>
       </div>
     </div>
-    <div class="toggle-row">
-      <span>跳过代码搜索</span>
-      <label class="toggle-switch"><input type="checkbox" id="input-no-code"><span class="toggle-slider"></span></label>
+
+    <!-- Basic settings -->
+    <div class="form-section">
+      <div class="form-section-title">⚙️ 基本设置</div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>📄 论文数量</label>
+          <input type="number" id="input-max-papers" value="15" min="5" max="50">
+        </div>
+        <div class="form-group">
+          <label>📅 年份范围</label>
+          <input type="number" id="input-year-range" value="5" min="1" max="10">
+        </div>
+      </div>
+      <div class="toggle-row">
+        <span class="toggle-label">跳过代码搜索</span>
+        <label class="toggle-switch"><input type="checkbox" id="input-no-code"><span class="toggle-slider"></span></label>
+      </div>
+      <div class="toggle-row">
+        <span class="toggle-label">跳过海报生成</span>
+        <label class="toggle-switch"><input type="checkbox" id="input-no-poster"><span class="toggle-slider"></span></label>
+      </div>
     </div>
-    <div class="toggle-row">
-      <span>跳过海报生成</span>
-      <label class="toggle-switch"><input type="checkbox" id="input-no-poster"><span class="toggle-slider"></span></label>
+
+    <!-- Advanced settings (collapsible) -->
+    <button class="advanced-toggle" id="btn-advanced" onclick="toggleAdvanced()">
+      <span class="arrow">▶</span> 高级选项
+    </button>
+    <div class="advanced-section" id="advanced-section">
+      <div class="toggle-row">
+        <span class="toggle-label">🚀 RAG 全文增强 <span class="toggle-hint">下载PDF提取全文</span></span>
+        <label class="toggle-switch"><input type="checkbox" id="input-use-rag"><span class="toggle-slider"></span></label>
+      </div>
+      <div class="toggle-row">
+        <span class="toggle-label">🤖 多 Agent 协作模式</span>
+        <label class="toggle-switch"><input type="checkbox" id="input-use-agent" checked><span class="toggle-slider"></span></label>
+      </div>
     </div>
-    <div class="toggle-row">
-      <span>🚀 RAG 全文增强 <small style="color:#94A3B8">(下载PDF提取全文)</small></span>
-      <label class="toggle-switch"><input type="checkbox" id="input-use-rag"><span class="toggle-slider"></span></label>
-    </div>
-    <div class="toggle-row">
-      <span>🤖 多Agent协作模式</span>
-      <label class="toggle-switch"><input type="checkbox" id="input-use-agent" checked><span class="toggle-slider"></span></label>
-    </div>
+
+    <!-- Action buttons -->
     <button class="btn btn-primary" id="btn-start" onclick="startJob()">🚀 开始生成综述</button>
-    <button class="btn btn-secondary" id="btn-clear" onclick="clearResults()" disabled>🗑 清除结果</button>
+    <button class="btn btn-ghost" id="btn-clear" onclick="clearResults()" disabled>🗑 清除结果</button>
+  </div>
+
+  <div class="sidebar-footer">
+    <span class="status-dot on" id="api-status-dot"></span>
+    <span id="api-status-text">API 已配置</span>
   </div>
 </aside>
 
@@ -344,70 +988,221 @@
 <main class="main">
   <div class="progress-bar-wrap"><div class="progress-bar-fill" id="progress-bar"></div></div>
 
+  <!-- Pipeline step indicator -->
+  <div class="pipeline-steps" id="pipeline-steps">
+    <div class="pipeline-step" data-step="fetch"><span class="step-icon">1</span>抓取论文</div>
+    <span class="pipeline-arrow">▸</span>
+    <div class="pipeline-step" data-step="rank"><span class="step-icon">2</span>排序筛选</div>
+    <span class="pipeline-arrow">▸</span>
+    <div class="pipeline-step" data-step="review"><span class="step-icon">3</span>AI 综述</div>
+    <span class="pipeline-arrow">▸</span>
+    <div class="pipeline-step" data-step="charts"><span class="step-icon">4</span>可视化</div>
+    <span class="pipeline-arrow">▸</span>
+    <div class="pipeline-step" data-step="poster"><span class="step-icon">5</span>海报</div>
+  </div>
+
   <!-- Status bar -->
   <div class="progress-status">
     <div class="step-text">
-      <div class="spinner" id="spinner"></div>
-      <span id="status-text">就绪 — 请在左侧输入主题并点击开始</span>
+      <span class="pulse-dot" id="pulse-dot"></span>
+      <span id="status-text">就绪 — 在左侧输入主题后点击开始</span>
     </div>
     <span id="status-progress">—</span>
   </div>
 
   <!-- Content area -->
   <div class="content" id="content-area">
+    <!-- Empty state -->
     <div class="empty-state" id="empty-state">
-      <div class="icon">📖</div>
-      <h3>开始你的文献综述</h3>
-      <p>在左侧输入研究主题，AI 将自动抓取最新论文、分析创新点、生成结构化综述与可视化图表。</p>
+      <div class="hero-icon">📖</div>
+      <h3>开始你的文献综述之旅</h3>
+      <p>输入研究主题，AI 自动抓取最新论文、分析创新点、生成结构化综述与可视化图表。</p>
+      <div class="feature-grid">
+        <div class="feature-item">
+          <div class="feat-icon">🔬</div>
+          <div class="feat-title">智能检索</div>
+          <div class="feat-desc">arXiv & Semantic Scholar 双源抓取</div>
+        </div>
+        <div class="feature-item">
+          <div class="feat-icon">🤖</div>
+          <div class="feat-title">AI 驱动</div>
+          <div class="feat-desc">DeepSeek 大模型生成综述</div>
+        </div>
+        <div class="feature-item">
+          <div class="feat-icon">📊</div>
+          <div class="feat-title">多维可视化</div>
+          <div class="feat-desc">演进图 · 类别分布 · 学术海报</div>
+        </div>
+      </div>
     </div>
 
     <!-- Tabs (hidden initially) -->
     <div class="tabs" id="tabs-bar" style="display: none;">
-      <button class="tab active" data-tab="tab-review">📝 综述正文</button>
-      <button class="tab" data-tab="tab-papers">📋 论文列表</button>
-      <button class="tab" data-tab="tab-evolution">📈 算法演进图</button>
-      <button class="tab" data-tab="tab-poster">🎨 海报</button>
-      <button class="tab" data-tab="tab-refs">📎 参考文献</button>
+      <button class="tab active" data-tab="tab-review"><span class="tab-icon">📝</span> 综述正文</button>
+      <button class="tab" data-tab="tab-papers"><span class="tab-icon">📋</span> 论文列表 <span class="tab-badge" id="paper-count-badge">0</span></button>
+      <button class="tab" data-tab="tab-evolution"><span class="tab-icon">📈</span> 演进图</button>
+      <button class="tab" data-tab="tab-poster"><span class="tab-icon">🎨</span> 海报</button>
+      <button class="tab" data-tab="tab-refs"><span class="tab-icon">📎</span> 参考文献</button>
     </div>
 
+    <!-- Tab contents -->
     <div class="tab-content active" id="tab-review">
+      <div class="download-bar" id="download-bar-review" style="display:none;"></div>
       <div class="markdown-body" id="review-content"></div>
     </div>
     <div class="tab-content" id="tab-papers">
+      <div class="paper-search-bar" id="paper-search-bar" style="display:none;">
+        <input type="text" id="paper-search-input" placeholder="🔍 搜索论文标题、作者、创新点..." oninput="filterPapers()">
+        <div class="category-chips" id="category-chips"></div>
+      </div>
       <div id="papers-content"></div>
     </div>
     <div class="tab-content" id="tab-evolution">
-      <div class="img-panel"><img id="img-evolution" src="" alt="算法演进图"><div class="caption">算法演进时间线 — 展示论文按年份和方法类别的分布</div></div>
+      <div class="img-panel">
+        <img id="img-evolution" src="" alt="算法演进图" style="display:none;">
+        <div class="caption">算法演进时间线 — 展示论文按年份和方法类别的分布</div>
+      </div>
     </div>
     <div class="tab-content" id="tab-poster">
-      <div class="img-panel"><img id="img-poster" src="" alt="学术海报"><div class="caption">综合学术海报</div></div>
+      <div class="img-panel">
+        <object id="img-poster" data="" type="image/svg+xml" style="display:none; width:100%; min-height:500px;">你的浏览器不支持 SVG</object>
+        <img id="img-poster-fallback" src="" alt="学术海报" style="display:none;">
+        <div class="caption">综合学术海报</div>
+      </div>
     </div>
     <div class="tab-content" id="tab-refs">
-      <div id="refs-preview" style="font-size:0.85rem; line-height:1.8;"></div>
+      <div id="refs-preview" style="font-size:0.85rem; line-height:2;"></div>
     </div>
   </div>
 </main>
 
 <script>
-// ---- State ----
+// ============================================================
+// STATE
+// ============================================================
 let currentJobId = null;
 let pollTimer = null;
 let jobResult = null;
+let allPapers = [];
+let activeCatFilter = null;
 
-// ---- Tab switching ----
-document.getElementById('tabs-bar').addEventListener('click', (e) => {
-  if (e.target.classList.contains('tab')) {
-    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-    document.querySelectorAll('.tab-content').forEach(tc => tc.classList.remove('active'));
-    e.target.classList.add('active');
-    document.getElementById(e.target.dataset.tab).classList.add('active');
+// ============================================================
+// THEME
+// ============================================================
+function initTheme() {
+  const saved = localStorage.getItem('theme');
+  const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+  if (saved === 'dark' || (!saved && prefersDark)) {
+    document.documentElement.setAttribute('data-theme', 'dark');
+    document.getElementById('btn-theme').textContent = '☀️';
   }
+}
+function toggleTheme() {
+  const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+  document.documentElement.setAttribute('data-theme', isDark ? '' : 'dark');
+  document.getElementById('btn-theme').textContent = isDark ? '🌙' : '☀️';
+  localStorage.setItem('theme', isDark ? 'light' : 'dark');
+}
+initTheme();
+
+// ============================================================
+// TOAST NOTIFICATIONS
+// ============================================================
+function showToast(message, type = 'info') {
+  const container = document.getElementById('toast-container');
+  const toast = document.createElement('div');
+  toast.className = `toast toast-${type}`;
+  toast.textContent = message;
+  container.appendChild(toast);
+  setTimeout(() => toast.remove(), 3600);
+}
+
+// ============================================================
+// HELPER
+// ============================================================
+function setTopic(text) {
+  document.getElementById('input-topic').value = text;
+  document.getElementById('input-topic').focus();
+}
+
+function toggleAdvanced() {
+  const btn = document.getElementById('btn-advanced');
+  const section = document.getElementById('advanced-section');
+  btn.classList.toggle('open');
+  section.classList.toggle('open');
+}
+
+// ============================================================
+// PIPELINE STEPS
+// ============================================================
+function updatePipelineStep(progress) {
+  const steps = document.querySelectorAll('.pipeline-step');
+  const thresholds = [
+    { step: 'fetch', min: 5, max: 30 },
+    { step: 'rank', min: 30, max: 45 },
+    { step: 'review', min: 45, max: 75 },
+    { step: 'charts', min: 75, max: 90 },
+    { step: 'poster', min: 90, max: 100 },
+  ];
+
+  steps.forEach(s => { s.classList.remove('active', 'done'); });
+
+  let lastDone = null;
+  thresholds.forEach((t, i) => {
+    const el = document.querySelector(`[data-step="${t.step}"]`);
+    if (!el) return;
+    if (progress >= t.max) {
+      el.classList.add('done');
+      el.querySelector('.step-icon').textContent = '✓';
+      lastDone = t.step;
+    } else if (progress >= t.min && progress < t.max) {
+      el.classList.add('active');
+    }
+  });
+}
+
+// ============================================================
+// TAB SWITCHING
+// ============================================================
+document.getElementById('tabs-bar').addEventListener('click', (e) => {
+  const tab = e.target.closest('.tab');
+  if (!tab) return;
+  switchTab(tab.dataset.tab);
 });
 
-// ---- API calls ----
+function switchTab(tabId) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.tab-content').forEach(tc => tc.classList.remove('active'));
+  document.querySelector(`[data-tab="${tabId}"]`).classList.add('active');
+  document.getElementById(tabId).classList.add('active');
+}
+
+// ============================================================
+// API CALLS
+// ============================================================
+async function fetchApiConfig() {
+  try {
+    const res = await fetch('/api/config');
+    const data = await res.json();
+    const dot = document.getElementById('api-status-dot');
+    const text = document.getElementById('api-status-text');
+    if (data.has_api_key) {
+      dot.className = 'status-dot on';
+      text.textContent = 'API 已配置';
+    } else {
+      dot.className = 'status-dot off';
+      text.textContent = 'API Key 未设置';
+    }
+  } catch(e) { /* ignore */ }
+}
+fetchApiConfig();
+
 async function startJob() {
   const topic = document.getElementById('input-topic').value.trim();
-  if (!topic) { alert('请输入研究主题'); return; }
+  if (!topic) {
+    showToast('请输入研究主题', 'error');
+    return;
+  }
 
   const btn = document.getElementById('btn-start');
   btn.disabled = true;
@@ -430,19 +1225,33 @@ async function startJob() {
       body: JSON.stringify(config),
     });
     const data = await res.json();
-    if (data.error) { alert(data.error); btn.disabled = false; btn.textContent = '🚀 开始生成综述'; return; }
+    if (data.error) {
+      showToast(data.error, 'error');
+      btn.disabled = false;
+      btn.textContent = '🚀 开始生成综述';
+      return;
+    }
 
     currentJobId = data.job_id;
     showResults();
-    document.getElementById('spinner').classList.add('active');
+    document.getElementById('pulse-dot').classList.add('active');
     document.getElementById('status-text').textContent = '初始化中...';
     document.getElementById('status-progress').textContent = '0%';
     document.getElementById('progress-bar').style.width = '0%';
     document.getElementById('btn-clear').disabled = false;
+    document.getElementById('pipeline-steps').classList.add('visible');
+
+    // Reset pipeline step icons
+    document.querySelectorAll('.pipeline-step').forEach(s => {
+      s.classList.remove('active', 'done');
+      const num = s.querySelector('.step-icon');
+      const map = { fetch: '1', rank: '2', review: '3', charts: '4', poster: '5' };
+      num.textContent = map[s.dataset.step] || '';
+    });
 
     pollTimer = setInterval(pollProgress, 800);
   } catch(e) {
-    alert('启动失败: ' + e.message);
+    showToast('启动失败: ' + e.message, 'error');
     btn.disabled = false;
     btn.textContent = '🚀 开始生成综述';
   }
@@ -457,79 +1266,215 @@ async function pollProgress() {
     document.getElementById('status-text').textContent = data.step || '';
     document.getElementById('status-progress').textContent = Math.round(data.progress) + '%';
     document.getElementById('progress-bar').style.width = data.progress + '%';
+    updatePipelineStep(data.progress);
 
     if (data.status === 'done') {
       clearInterval(pollTimer);
-      document.getElementById('spinner').classList.remove('active');
+      document.getElementById('pulse-dot').classList.remove('active');
       document.getElementById('btn-start').disabled = false;
-      document.getElementById('btn-start').textContent = '🚀 重新生成';
+      document.getElementById('btn-start').textContent = '🔄 重新生成';
+      document.getElementById('pipeline-steps').classList.remove('visible');
       jobResult = data.result;
+      allPapers = data.result?.papers || [];
       renderResults(data.result);
+      showToast('综述生成完成！', 'success');
     } else if (data.status === 'error') {
       clearInterval(pollTimer);
-      document.getElementById('spinner').classList.remove('active');
+      document.getElementById('pulse-dot').classList.remove('active');
       document.getElementById('btn-start').disabled = false;
       document.getElementById('btn-start').textContent = '🚀 开始生成综述';
-      document.getElementById('status-text').textContent = '❌ 错误: ' + (data.message || '未知错误');
+      document.getElementById('pipeline-steps').classList.remove('visible');
+      const msg = '❌ 错误: ' + (data.message || '未知错误');
+      document.getElementById('status-text').textContent = msg;
+      showToast(data.message || '发生未知错误', 'error');
     }
   } catch(e) {
     console.error('Poll error:', e);
   }
 }
 
+// ============================================================
+// RENDER RESULTS
+// ============================================================
 function renderResults(result) {
-  // Review tab — render markdown
-  const reviewHtml = marked.parse(result.review_text || '');
+  // Download bar
+  const downloadBar = document.getElementById('download-bar-review');
+  if (result.files) {
+    let dlHtml = '';
+    if (result.files.review) dlHtml += `<a class="btn-download" href="${result.files.review}" download>📥 下载综述 (.md)</a>`;
+    if (result.files.bib) dlHtml += `<a class="btn-download" href="${result.files.bib}" download>📥 下载 BibTeX (.bib)</a>`;
+    if (result.files.evolution) dlHtml += `<a class="btn-download" href="${result.files.evolution}" download>📥 下载演进图 (.png)</a>`;
+    if (result.files.poster) dlHtml += `<a class="btn-download" href="${result.files.poster}" download>📥 下载海报 (.svg)</a>`;
+    downloadBar.innerHTML = dlHtml;
+    downloadBar.style.display = 'flex';
+  }
+
+  // Review tab
+  const reviewHtml = marked.parse(result.review_text || '*（综述内容为空）*');
   document.getElementById('review-content').innerHTML = reviewHtml;
 
   // Papers tab
   if (result.papers) {
-    let papersHtml = '<div class="stats-grid">' +
-      `<div class="stat-card"><div class="stat-value">${result.paper_count}</div><div class="stat-label">论文总数</div></div>` +
-      `<div class="stat-card"><div class="stat-value">${result.papers.filter(p=>p.has_code).length}</div><div class="stat-label">含开源代码</div></div>` +
-      `<div class="stat-card"><div class="stat-value">${result.validation.valid}/${result.validation.total}</div><div class="stat-label">引用覆盖</div></div>` +
-      `<div class="stat-card"><div class="stat-value">${new Set(result.papers.map(p=>p.method_category)).size}</div><div class="stat-label">方法类别</div></div>` +
-      '</div>';
-
-    result.papers.forEach(p => {
-      papersHtml += `<div class="paper-card">
-        <span class="paper-index">${p.index}</span>
-        <span class="paper-title">${p.title}</span>
-        <div class="paper-meta">
-          <span>👤 ${p.first_author}</span>
-          <span>📅 ${p.year}</span>
-          <span>📊 ${p.citations} 引用</span>
-          <span class="badge badge-cat">${p.method_category}</span>
-          ${p.has_code ? '<span class="badge badge-code">📦 有代码</span>' : ''}
-        </div>
-        ${p.key_innovation ? `<div class="paper-innovation">💡 ${p.key_innovation}</div>` : ''}
-      </div>`;
-    });
-    document.getElementById('papers-content').innerHTML = papersHtml;
+    document.getElementById('paper-count-badge').textContent = result.paper_count;
+    document.getElementById('paper-search-bar').style.display = 'flex';
+    renderPaperList(result);
   }
 
   // Evolution tab
   if (result.files && result.files.evolution) {
-    document.getElementById('img-evolution').src = result.files.evolution + '?t=' + Date.now();
+    const img = document.getElementById('img-evolution');
+    img.src = result.files.evolution + '?t=' + Date.now();
+    img.style.display = '';
   }
 
-  // Poster tab
+  // Poster tab — prefer <object> for SVG
   if (result.files && result.files.poster) {
-    document.getElementById('img-poster').src = result.files.poster + '?t=' + Date.now();
+    const obj = document.getElementById('img-poster');
+    obj.data = result.files.poster + '?t=' + Date.now();
+    obj.style.display = '';
   }
 
-  // References tab preview
+  // References tab
   if (result.papers) {
     let refHtml = '';
     result.papers.forEach(p => {
       refHtml += `<p><strong>[${p.index}]</strong> ${p.first_author} (${p.year}). <em>${p.title}</em>.`;
-      if (p.has_code) refHtml += ` <a href="${p.code_urls[0]}" target="_blank">[代码]</a>`;
+      if (p.has_code && p.code_urls && p.code_urls.length > 0) {
+        refHtml += ` <a href="${p.code_urls[0]}" target="_blank" rel="noopener">[代码]</a>`;
+      }
       refHtml += '</p>';
     });
     document.getElementById('refs-preview').innerHTML = refHtml;
   }
+
+  // Scroll to top of content
+  document.querySelector('.tab-content.active')?.scrollTo(0, 0);
 }
 
+function renderPaperList(result) {
+  // Stats
+  let html = '<div class="stats-grid">' +
+    `<div class="stat-card"><div class="stat-value">${result.paper_count}</div><div class="stat-label">论文总数</div></div>` +
+    `<div class="stat-card"><div class="stat-value">${result.papers.filter(p=>p.has_code).length}</div><div class="stat-label">含开源代码</div></div>` +
+    `<div class="stat-card"><div class="stat-value">${result.validation.valid}/${result.validation.total}</div><div class="stat-label">引用覆盖</div></div>` +
+    `<div class="stat-card"><div class="stat-value">${new Set(result.papers.map(p=>p.method_category)).size}</div><div class="stat-label">方法类别</div></div>` +
+    '</div>';
+
+  // Category filter chips
+  const cats = [...new Set(result.papers.map(p => p.method_category).filter(Boolean))];
+  let catHtml = '';
+  cats.forEach(c => {
+    catHtml += `<button class="cat-chip" data-cat="${c}" onclick="filterByCategory('${c.replace(/'/g, "\\'")}', this)">${c}</button>`;
+  });
+  document.getElementById('category-chips').innerHTML = catHtml;
+
+  // Paper cards container
+  html += '<div id="paper-cards-container">';
+  result.papers.forEach((p, i) => {
+    html += buildPaperCard(p, i);
+  });
+  html += '</div>';
+  document.getElementById('papers-content').innerHTML = html;
+
+  // Store papers globally
+  allPapers = result.papers;
+  document.getElementById('paper-search-input').value = '';
+  activeCatFilter = null;
+}
+
+function buildPaperCard(p) {
+  const codeBadge = p.has_code
+    ? '<span class="badge badge-code">📦 有代码</span>'
+    : '<span class="badge badge-no-code">— 无代码</span>';
+  const cat = p.method_category && p.method_category !== '未分类' ? p.method_category : '';
+
+  return `<div class="paper-card" data-index="${p.index}" data-title="${p.title.toLowerCase()}" data-author="${p.first_author.toLowerCase()}" data-innovation="${(p.key_innovation||'').toLowerCase()}" data-cat="${cat.toLowerCase()}" onclick="togglePaperCard(this)">
+    <div class="paper-header">
+      <span class="paper-index">${p.index}</span>
+      <div class="paper-info">
+        <div class="paper-title">${escapeHtml(p.title)}</div>
+        <div class="paper-meta">
+          <span>👤 ${escapeHtml(p.first_author)}</span>
+          <span>📅 ${p.year}</span>
+          <span>📊 ${p.citations} 引用</span>
+          ${cat ? `<span class="badge badge-cat">${escapeHtml(cat)}</span>` : ''}
+          ${codeBadge}
+        </div>
+        <div class="paper-expand-hint">点击展开详情 ▾</div>
+      </div>
+    </div>
+    <div class="paper-details">
+      ${p.key_innovation ? `<div class="detail-row"><span class="detail-label">💡 核心创新</span><br>${escapeHtml(p.key_innovation)}</div>` : ''}
+      ${p.key_results ? `<div class="detail-row"><span class="detail-label">📊 关键结果</span><br>${escapeHtml(p.key_results)}</div>` : ''}
+      ${p.datasets_used ? `<div class="detail-row"><span class="detail-label">📦 使用数据集</span><br>${escapeHtml(p.datasets_used)}</div>` : ''}
+      ${p.has_code && p.code_urls && p.code_urls.length > 0 ? `<div class="detail-row"><span class="detail-label">🔗 代码链接</span><div class="code-links">${p.code_urls.map(u => `<a class="code-link" href="${u}" target="_blank" rel="noopener" onclick="event.stopPropagation()">${u.replace(/https?:\/\/github\.com\//,'')}</a>`).join('')}</div></div>` : ''}
+      <button class="btn-copy" onclick="event.stopPropagation(); copyCitation(${p.index})" title="复制引用">📋 复制引用</button>
+    </div>
+  </div>`;
+}
+
+function escapeHtml(str) {
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+function togglePaperCard(card) {
+  card.classList.toggle('expanded');
+}
+
+// ============================================================
+// PAPER SEARCH & FILTER
+// ============================================================
+function filterPapers() {
+  const query = document.getElementById('paper-search-input').value.toLowerCase();
+  const cards = document.querySelectorAll('#paper-cards-container .paper-card');
+  let visible = 0;
+  cards.forEach(card => {
+    const matchQuery = !query ||
+      card.dataset.title.includes(query) ||
+      card.dataset.author.includes(query) ||
+      card.dataset.innovation.includes(query);
+    const matchCat = !activeCatFilter || card.dataset.cat === activeCatFilter.toLowerCase();
+    if (matchQuery && matchCat) {
+      card.style.display = '';
+      visible++;
+    } else {
+      card.style.display = 'none';
+    }
+  });
+  document.getElementById('paper-count-badge').textContent = visible;
+}
+
+function filterByCategory(cat, chipEl) {
+  if (activeCatFilter === cat) {
+    activeCatFilter = null;
+    document.querySelectorAll('.cat-chip').forEach(c => c.classList.remove('active'));
+  } else {
+    activeCatFilter = cat;
+    document.querySelectorAll('.cat-chip').forEach(c => c.classList.remove('active'));
+    chipEl.classList.add('active');
+  }
+  filterPapers();
+}
+
+// ============================================================
+// COPY CITATION
+// ============================================================
+function copyCitation(index) {
+  const paper = allPapers.find(p => p.index === index);
+  if (!paper) return;
+  const citation = `[${paper.index}] ${paper.first_author} (${paper.year}). ${paper.title}.`;
+  navigator.clipboard.writeText(citation).then(() => {
+    showToast('引用已复制到剪贴板', 'success');
+  }).catch(() => {
+    showToast('复制失败，请手动复制', 'error');
+  });
+}
+
+// ============================================================
+// SHOW / CLEAR RESULTS
+// ============================================================
 function showResults() {
   document.getElementById('empty-state').style.display = 'none';
   document.getElementById('tabs-bar').style.display = 'flex';
@@ -538,26 +1483,66 @@ function showResults() {
 function clearResults() {
   currentJobId = null;
   jobResult = null;
+  allPapers = [];
+  activeCatFilter = null;
   if (pollTimer) clearInterval(pollTimer);
-  document.getElementById('spinner').classList.remove('active');
-  document.getElementById('status-text').textContent = '就绪 — 请在左侧输入主题并点击开始';
+  document.getElementById('pulse-dot').classList.remove('active');
+  document.getElementById('status-text').textContent = '就绪 — 在左侧输入主题后点击开始';
   document.getElementById('status-progress').textContent = '—';
   document.getElementById('progress-bar').style.width = '0%';
   document.getElementById('btn-start').disabled = false;
   document.getElementById('btn-start').textContent = '🚀 开始生成综述';
   document.getElementById('btn-clear').disabled = true;
+  document.getElementById('pipeline-steps').classList.remove('visible');
   document.getElementById('empty-state').style.display = 'flex';
   document.getElementById('tabs-bar').style.display = 'none';
   document.getElementById('review-content').innerHTML = '';
   document.getElementById('papers-content').innerHTML = '';
+  document.getElementById('paper-search-bar').style.display = 'none';
   document.getElementById('img-evolution').src = '';
-  document.getElementById('img-poster').src = '';
+  document.getElementById('img-evolution').style.display = 'none';
+  document.getElementById('img-poster').data = '';
+  document.getElementById('img-poster').style.display = 'none';
   document.getElementById('refs-preview').innerHTML = '';
+  document.getElementById('download-bar-review').innerHTML = '';
+  document.getElementById('download-bar-review').style.display = 'none';
+  document.getElementById('paper-count-badge').textContent = '0';
   document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
   document.querySelectorAll('.tab-content').forEach(tc => tc.classList.remove('active'));
   document.querySelector('[data-tab="tab-review"]').classList.add('active');
   document.getElementById('tab-review').classList.add('active');
+
+  // Reset pipeline step icons
+  document.querySelectorAll('.pipeline-step').forEach(s => {
+    s.classList.remove('active', 'done');
+    const map = { fetch: '1', rank: '2', review: '3', charts: '4', poster: '5' };
+    s.querySelector('.step-icon').textContent = map[s.dataset.step] || '';
+  });
 }
+
+// ============================================================
+// KEYBOARD SHORTCUTS
+// ============================================================
+document.addEventListener('keydown', (e) => {
+  // Ctrl+Enter to start job
+  if (e.ctrlKey && e.key === 'Enter') {
+    e.preventDefault();
+    if (!currentJobId || document.getElementById('btn-start').textContent.includes('重新')) {
+      startJob();
+    }
+  }
+  // Number keys 1-5 to switch tabs (only when results are shown)
+  if (!e.ctrlKey && !e.metaKey && !e.altKey && jobResult) {
+    const target = e.target;
+    if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT') return;
+    const tabs = ['tab-review', 'tab-papers', 'tab-evolution', 'tab-poster', 'tab-refs'];
+    const num = parseInt(e.key);
+    if (num >= 1 && num <= 5) {
+      e.preventDefault();
+      switchTab(tabs[num - 1]);
+    }
+  }
+});
 </script>
 
 </body>
