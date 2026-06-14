@@ -39,7 +39,7 @@ from src.citation_manager import (
     validate_citations,
 )
 from src.evolution_diagram import generate_evolution_diagram, generate_category_distribution_chart
-from src.poster_generator import generate_poster
+from src.svg_poster_generator import generate_svg_poster
 
 console = Console()
 
@@ -316,19 +316,16 @@ def run_pipeline(args: argparse.Namespace) -> None:
 
     # Poster
     if not args.no_poster:
-        poster_path = os.path.join(output_dir, "poster.png")
+        poster_path = os.path.join(output_dir, "poster.svg")
 
-        # Extract summary from review
-        review_summary = review_text[:1000]
-
-        generate_poster(
+        generate_svg_poster(
             papers=papers,
             topic=topic,
-            review_summary=review_summary,
+            review_summary=review_text,
             evolution_diagram_path=evo_path,
             output_path=poster_path,
         )
-        console.print(f"  [green]✓[/green] 海报已保存至 [bold]{poster_path}[/bold]")
+        console.print(f"  [green]✓[/green] SVG 海报已保存至 [bold]{poster_path}[/bold]")
 
     # ---- Summary ----
     console.print()

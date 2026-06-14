@@ -24,7 +24,7 @@ from src.paper_ranker import rank_papers, filter_papers
 from src.review_generator import generate_review, extract_paper_details
 from src.citation_manager import generate_bibtex_file, append_references_to_review, validate_citations
 from src.evolution_diagram import generate_evolution_diagram, generate_category_distribution_chart
-from src.poster_generator import generate_poster
+from src.svg_poster_generator import generate_svg_poster
 
 logger = logging.getLogger(__name__)
 
@@ -148,8 +148,8 @@ def _run_pipeline_thread(job_id: str, topic: str, max_papers: int, year_range: i
         poster_path = None
         if not no_poster:
             _update_job(job_id, step="正在生成海报...", progress=92)
-            poster_path = job_dir / "poster.png"
-            generate_poster(papers, topic, review_text[:1000], str(evo_path), str(poster_path))
+            poster_path = job_dir / "poster.svg"
+            generate_svg_poster(papers, topic, review_text, str(evo_path), str(poster_path))
 
         # Build paper list data for frontend
         paper_list = []
@@ -186,7 +186,7 @@ def _run_pipeline_thread(job_id: str, topic: str, max_papers: int, year_range: i
                     "bib": f"/output/{job_id}/references.bib",
                     "evolution": f"/output/{job_id}/evolution.png",
                     "distribution": f"/output/{job_id}/distribution.png",
-                    "poster": f"/output/{job_id}/poster.png" if poster_path else None,
+                    "poster": f"/output/{job_id}/poster.svg" if poster_path else None,
                 }
             },
         )

@@ -26,7 +26,7 @@ from src.citation_manager import (
     validate_citations,
 )
 from src.evolution_diagram import generate_evolution_diagram, generate_category_distribution_chart
-from src.poster_generator import generate_poster
+from src.svg_poster_generator import generate_svg_poster
 from src.rag_engine import batch_rag_enrich
 
 logger = logging.getLogger(__name__)
@@ -321,7 +321,7 @@ class VisualizerAgent(BaseAgent):
 
         # Poster with paper figures
         if not state.no_poster:
-            poster_path = os.path.join(state.output_dir, "poster.png")
+            poster_path = os.path.join(state.output_dir, "poster.svg")
 
             # Collect paper figures from RAG data
             paper_figures = []
@@ -340,10 +340,10 @@ class VisualizerAgent(BaseAgent):
 
             self.log(f"从论文PDF提取了 {len(paper_figures)} 张图片用于海报")
 
-            generate_poster(
+            generate_svg_poster(
                 papers=state.papers,
                 topic=state.topic,
-                review_summary=state.review_text[:1000],
+                review_summary=state.review_text,
                 evolution_diagram_path=evo_path,
                 output_path=poster_path,
                 paper_figures=paper_figures if paper_figures else None,
