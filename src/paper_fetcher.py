@@ -1,0 +1,267 @@
+"""Paper fetching module — searches arXiv and Semantic Scholar APIs."""
+
+import time
+import logging
+from typing import Optional
+from datetime import datetime, timedelta
+
+import arxiv
+import requests
+
+from src.models import Paper, Author
+
+logger = logging.getLogger(__name__)
+
+# --- ArXiv Search ---
+
+ARXIV_SORT_MAP = {
+    "relevance": arxiv.SortCriterion.Relevance,
+    "recency": arxiv.SortCriterion.SubmittedDate,
+    "citations": arxiv.SortCriterion.Relevance,  # arXiv doesn't sort by citations
+}
+
+
+def _arxiv_result_to_paper(result: arxiv.Result) -> Paper:
+    """Convert an arxiv.Result to our Paper dataclass."""
+    arxiv_id = result.entry_id.split("/")[-1]
+    # Remove version suffix like v1, v2
+    if "v" in arxiv_id and arxiv_id.split("v")[-1].isdigit():
+        arxiv_id = "v".join(arxiv_id.split("v")[:-1]) if arxiv_id.count("v") > 1 else arxiv_id
+    # Simpler approach
+    arxiv_id_clean = result.entry_id.split("/")[-1]
+
+    authors = [Author(name=a.name) for a in result.authors]
+
+    return Paper(
+        arxiv_id=arxiv_id_clean,
+        title=result.title.strip(),
+        abstract=result.summary.strip().replace("\n", " "),
+        authors=authors,
+        year=result.published.year,
+        published_date=result.published.strftime("%Y-%m-%d"),
+        arxiv_url=result.entry_id,
+        pdf_url=result.pdf_url,
+        source="arxiv",
+    )
+
+
+def search_arxiv(
+    topic: str,
+    max_results: int = 20,
+    sort_by: str = "relevance",
+    year_range: int = 5,
+) -> list[Paper]:
+    """
+    Search arXiv for papers matching the topic.
+
+    Args:
+        topic: Research topic / search query
+        max_results: Maximum number of results to return
+        sort_by: Sort criterion ("relevance", "recency", "citations")
+        year_range: Only include papers from the last N years
+
+    Returns:
+        List of Paper objects
+    """
+    logger.info(f"Searching arXiv for: '{topic}' (max={max_results})")
+
+    sort_criterion = ARXIV_SORT_MAP.get(sort_by, arxiv.SortCriterion.Relevance)
+
+    client = arxiv.Client(
+        page_size=min(max_results, 100),
+        delay_seconds=1.0,
+        num_retries=3,
+    )
+
+    search = arxiv.Search(
+        query=topic,
+        max_results=max_results,
+        sort_by=sort_criterion,
+    )
+
+    papers = []
+    try:
+        for result in client.results(search):
+            # Filter by year range
+            cutoff_year = datetime.now().year - year_range
+            if result.published.year < cutoff_year:
+                continue
+            paper = _arxiv_result_to_paper(result)
+            papers.append(paper)
+
+            if len(papers) >= max_results:
+                break
+    except Exception as e:
+        logger.warning(f"arXiv search encountered an error: {e}")
+
+    logger.info(f"arXiv returned {len(papers)} papers")
+    return papers
+
+
+# --- Semantic Scholar Search ---
+
+SEMANTIC_SCHOLAR_API = "https://api.semanticscholar.org/graph/v1"
+
+
+def _ss_result_to_paper(ss_paper: dict) -> Optional[Paper]:
+    """Convert a Semantic Scholar result to our Paper dataclass."""
+    try:
+        # Try to extract arxiv_id
+        arxiv_id = None
+        external_ids = ss_paper.get("externalIds", {}) or {}
+        arxiv_id = external_ids.get("ArXiv")
+
+        if not arxiv_id:
+            # Generate a synthetic ID from Semantic Scholar ID
+            arxiv_id = f"ss_{ss_paper.get('paperId', 'unknown')}"
+
+        authors = []
+        for a in ss_paper.get("authors", []) or []:
+            authors.append(Author(name=a.get("name", "Unknown")))
+
+        year = ss_paper.get("year") or 0
+        pub_date = ss_paper.get("publicationDate") or f"{year}-01-01" if year else None
+
+        paper = Paper(
+            arxiv_id=arxiv_id,
+            title=ss_paper.get("title", "Untitled").strip(),
+            abstract=ss_paper.get("abstract", "") or "",
+            authors=authors,
+            year=year,
+            published_date=pub_date,
+            arxiv_url=f"https://arxiv.org/abs/{arxiv_id}" if not arxiv_id.startswith("ss_") else None,
+            pdf_url=f"https://arxiv.org/pdf/{arxiv_id}.pdf" if not arxiv_id.startswith("ss_") else None,
+            citation_count=ss_paper.get("citationCount", 0) or 0,
+            influential_citation_count=ss_paper.get("influentialCitationCount", 0) or 0,
+            source="semantic_scholar",
+        )
+
+        # Check for code URLs in external IDs
+        if ss_paper.get("externalIds"):
+            # Some papers have GitHub links in publicationVenue or other fields
+            pass
+
+        return paper
+    except Exception as e:
+        logger.debug(f"Failed to convert Semantic Scholar paper: {e}")
+        return None
+
+
+def search_semantic_scholar(
+    topic: str,
+    max_results: int = 20,
+    year_range: int = 5,
+    api_key: Optional[str] = None,
+) -> list[Paper]:
+    """
+    Search Semantic Scholar for papers matching the topic.
+
+    Args:
+        topic: Research topic / search query
+        max_results: Maximum number of results
+        year_range: Only include papers from the last N years
+        api_key: Optional API key for higher rate limits
+
+    Returns:
+        List of Paper objects
+    """
+    logger.info(f"Searching Semantic Scholar for: '{topic}' (max={max_results})")
+
+    headers = {"Accept": "application/json"}
+    if api_key:
+        headers["x-api-key"] = api_key
+
+    # Use the search endpoint with fields parameter for rich metadata
+    url = f"{SEMANTIC_SCHOLAR_API}/paper/search"
+    params = {
+        "query": topic,
+        "limit": min(max_results, 100),
+        "offset": 0,
+        "fields": (
+            "title,abstract,year,authors,externalIds,"
+            "citationCount,influentialCitationCount,"
+            "publicationDate,journal,publicationVenue"
+        ),
+    }
+
+    papers = []
+    try:
+        response = requests.get(url, params=params, headers=headers, timeout=30)
+        response.raise_for_status()
+        data = response.json()
+
+        cutoff_year = datetime.now().year - year_range
+
+        for item in data.get("data", []) or []:
+            paper = _ss_result_to_paper(item)
+            if paper and (paper.year == 0 or paper.year >= cutoff_year):
+                papers.append(paper)
+
+    except requests.exceptions.RequestException as e:
+        logger.warning(f"Semantic Scholar search error: {e}")
+
+    logger.info(f"Semantic Scholar returned {len(papers)} papers")
+    return papers
+
+
+# --- Unified Search ---
+
+def fetch_papers(
+    topic: str,
+    max_results: int = 20,
+    year_range: int = 5,
+    sort_by: str = "relevance",
+    include_ss: bool = True,
+    api_key: Optional[str] = None,
+) -> list[Paper]:
+    """
+    Fetch papers from arXiv and optionally Semantic Scholar, then merge + deduplicate.
+
+    Args:
+        topic: Research topic / search query
+        max_results: Maximum number of papers to return
+        year_range: Look back N years
+        sort_by: Sort criterion for arXiv
+        include_ss: Whether to also search Semantic Scholar
+        api_key: Semantic Scholar API key
+
+    Returns:
+        Deduplicated list of Paper objects
+    """
+    all_papers: dict[str, Paper] = {}
+
+    # Search arXiv first (primary source)
+    arxiv_papers = search_arxiv(
+        topic=topic,
+        max_results=max_results,
+        sort_by=sort_by,
+        year_range=year_range,
+    )
+    for p in arxiv_papers:
+        key = p.arxiv_id
+        all_papers[key] = p
+
+    # Search Semantic Scholar (supplement)
+    if include_ss:
+        time.sleep(0.5)  # Be polite to APIs
+        ss_papers = search_semantic_scholar(
+            topic=topic,
+            max_results=max_results,
+            year_range=year_range,
+            api_key=api_key,
+        )
+        for p in ss_papers:
+            key = p.arxiv_id
+            if key not in all_papers:
+                all_papers[key] = p
+            else:
+                # Enrich existing paper with SS metadata
+                existing = all_papers[key]
+                if p.citation_count > existing.citation_count:
+                    existing.citation_count = p.citation_count
+                if p.influential_citation_count > existing.influential_citation_count:
+                    existing.influential_citation_count = p.influential_citation_count
+
+    papers = list(all_papers.values())
+    logger.info(f"Total unique papers after merge: {len(papers)}")
+    return papers

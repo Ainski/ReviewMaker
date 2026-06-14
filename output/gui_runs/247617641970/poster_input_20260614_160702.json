@@ -1,0 +1,469 @@
+{
+  "topic": "Transformer attention mechanism",
+  "review_summary": "## 一、引言\nTransformer架构自提出以来，凭借其强大的序列建模能力，迅速成为自然语言处理与计算机视觉领域的主流模型。其核心组件——自注意力（Self-Attention）机制，通过计算序列中所有位置之间的成对相似度来捕获长距离依赖关系，为模型性能的飞跃提供了关键支撑。然而，随着应用场景的不断拓展，标准注意力机制面临的挑战也日益凸显：其二次计算复杂度限制了在长序列和高分辨率图像上的应用；其固有的全局均匀关注模式缺乏针对重要区域的偏置，可能导致计算资源的浪费或对噪声的过度敏感；此外，在3D点云、图像超分辨率等特定任务中，如何将注意力机制与数据固有的局部性或结构先验有效结合，仍是亟待解决的问题。\n\n本文聚焦于近期为应对上述挑战而提出的Transformer注意力机制改进工作，涵盖视觉解释（Visual Explanations）、3D实例分割（3D Instance Segmentation）、图像超分辨率（Image Super-Resolution）、长上下文语言建模（Long-Context Language Modeling）以及理论分析（Theoretical Analysis）等多个方向。我们将这些工作按方法范式和解决的问题进行归类分析：包括通过引入遗忘门（Forget Gate）、能量门控（Energy Gate）等机制增强注意力可塑性（Plasticity）；通过局部化（Localized）或稀疏化（Sparse）策略降低计算复杂度；以及通过可视化（Visualization）方法提升模型可解释性。通过对11篇代表性论文的深入剖析，本文旨在揭示当前注意力机制优化路径的内在逻辑、性能权衡与未来趋势。\n\n## 二、方法分类\n首先，一部分工作旨在通过引入额外门控或偏置信号，改进标准缩放点积注意力的信息流与稳定性。例如，[5]提出的Forgetting Attention通过引入类似于递归模型中遗忘门的数据依赖权重，在长上下文中实现对不相关历史信息的动态衰减。[4]则提出了能量门控注意力（Energy-Gated Attention），通过端到端学习每个token的“信息能量”作为偏置，引导模型关注高信息密度区域，并配合小波位置编码（Wavelet Positional Encoding）实现频率感知的局部性偏置。[10]的Gated Sparse A",
+  "evolution_diagram_path": "E:\\Homeworks\\ChineseInfomationProcessing\\bighw\\output\\gui_runs\\247617641970\\evolution.png",
+  "output_path": "E:\\Homeworks\\ChineseInfomationProcessing\\bighw\\output\\gui_runs\\247617641970\\poster.png",
+  "dpi": 200,
+  "papers": [
+    {
+      "arxiv_id": "2402.04563v1",
+      "title": "Attention Guided CAM: Visual Explanations of Vision Transformer Guided by Self-Attention",
+      "abstract": "Vision Transformer(ViT) is one of the most widely used models in the computer vision field with its great performance on various tasks. In order to fully utilize the ViT-based architecture in various applications, proper visualization methods with a decent localization performance are necessary, but these methods employed in CNN-based models are still not available in ViT due to its unique structure. In this work, we propose an attention-guided visualization method applied to ViT that provides a high-level semantic explanation for its decision. Our method selectively aggregates the gradients directly propagated from the classification output to each self-attention, collecting the contribution of image features extracted from each location of the input image. These gradients are additionally guided by the normalized self-attention scores, which are the pairwise patch correlation scores. They are used to supplement the gradients on the patch-level context information efficiently detected by the self-attention mechanism. This approach of our method provides elaborate high-level semantic explanations with great localization performance only with the class labels. As a result, our method outperforms the previous leading explainability methods of ViT in the weakly-supervised localization task and presents great capability in capturing the full instances of the target class object. Meanwhile, our method provides a visualization that faithfully explains the model, which is demonstrated in the perturbation comparison test.",
+      "authors": [
+        {
+          "name": "Saebom Leem",
+          "affiliation": null
+        },
+        {
+          "name": "Hyunseok Seo",
+          "affiliation": null
+        }
+      ],
+      "year": 2024,
+      "published_date": "2024-02-07",
+      "journal": null,
+      "arxiv_url": "http://arxiv.org/abs/2402.04563v1",
+      "pdf_url": "https://arxiv.org/pdf/2402.04563v1",
+      "has_code": true,
+      "code_urls": [
+        "https://github.com/LeemSaebom/Attention-Guided-CAM-Visual-Explanations-of-Vision-Transformer-Guided-by-Self-Attention"
+      ],
+      "citation_count": 0,
+      "influential_citation_count": 0,
+      "source": "arxiv",
+      "relevance_score": 1.0,
+      "rank_score": 0.7899999999999999,
+      "method_category": "注意力机制类",
+      "key_innovation": "提出了一种基于自注意力引导的视觉Transformer可视化方法Attention Guided CAM。",
+      "datasets_used": [
+        "未在摘要中明确提及"
+      ],
+      "key_results": "该方法在ViT模型上实现了良好的定位性能，弥补了CNN可视化方法在ViT中的缺失。"
+    },
+    {
+      "arxiv_id": "2309.01692v1",
+      "title": "Mask-Attention-Free Transformer for 3D Instance Segmentation",
+      "abstract": "Recently, transformer-based methods have dominated 3D instance segmentation, where mask attention is commonly involved. Specifically, object queries are guided by the initial instance masks in the first cross-attention, and then iteratively refine themselves in a similar manner. However, we observe that the mask-attention pipeline usually leads to slow convergence due to low-recall initial instance masks. Therefore, we abandon the mask attention design and resort to an auxiliary center regression task instead. Through center regression, we effectively overcome the low-recall issue and perform cross-attention by imposing positional prior. To reach this goal, we develop a series of position-aware designs. First, we learn a spatial distribution of 3D locations as the initial position queries. They spread over the 3D space densely, and thus can easily capture the objects in a scene with a high recall. Moreover, we present relative position encoding for the cross-attention and iterative refinement for more accurate position queries. Experiments show that our approach converges 4x faster than existing work, sets a new state of the art on ScanNetv2 3D instance segmentation benchmark, and also demonstrates superior performance across various datasets. Code and models are available at https://github.com/dvlab-research/Mask-Attention-Free-Transformer.",
+      "authors": [
+        {
+          "name": "Xin Lai",
+          "affiliation": null
+        },
+        {
+          "name": "Yuhui Yuan",
+          "affiliation": null
+        },
+        {
+          "name": "Ruihang Chu",
+          "affiliation": null
+        },
+        {
+          "name": "Yukang Chen",
+          "affiliation": null
+        },
+        {
+          "name": "Han Hu",
+          "affiliation": null
+        },
+        {
+          "name": "Jiaya Jia",
+          "affiliation": null
+        }
+      ],
+      "year": 2023,
+      "published_date": "2023-09-04",
+      "journal": null,
+      "arxiv_url": "http://arxiv.org/abs/2309.01692v1",
+      "pdf_url": "https://arxiv.org/pdf/2309.01692v1",
+      "has_code": true,
+      "code_urls": [
+        "https://github.com/JIA-Lab-research/Mask-Attention-Free-Transformer"
+      ],
+      "citation_count": 0,
+      "influential_citation_count": 0,
+      "source": "arxiv",
+      "relevance_score": 1.0,
+      "rank_score": 0.76,
+      "method_category": "Transformer类",
+      "key_innovation": "提出了一种无掩码注意力的Transformer架构，用于3D实例分割。",
+      "datasets_used": [
+        "未在摘要中明确提及"
+      ],
+      "key_results": "该方法避免了掩码注意力因初始实例召回率低导致的收敛缓慢问题。"
+    },
+    {
+      "arxiv_id": "2209.15001v3",
+      "title": "Dilated Neighborhood Attention Transformer",
+      "abstract": "Transformers are quickly becoming one of the most heavily applied deep learning architectures across modalities, domains, and tasks. In vision, on top of ongoing efforts into plain transformers, hierarchical transformers have also gained significant attention, thanks to their performance and easy integration into existing frameworks. These models typically employ localized attention mechanisms, such as the sliding-window Neighborhood Attention (NA) or Swin Transformer's Shifted Window Self Attention. While effective at reducing self attention's quadratic complexity, local attention weakens two of the most desirable properties of self attention: long range inter-dependency modeling, and global receptive field. In this paper, we introduce Dilated Neighborhood Attention (DiNA), a natural, flexible and efficient extension to NA that can capture more global context and expand receptive fields exponentially at no additional cost. NA's local attention and DiNA's sparse global attention complement each other, and therefore we introduce Dilated Neighborhood Attention Transformer (DiNAT), a new hierarchical vision transformer built upon both. DiNAT variants enjoy significant improvements over strong baselines such as NAT, Swin, and ConvNeXt. Our large model is faster and ahead of its Swin counterpart by 1.6% box AP in COCO object detection, 1.4% mask AP in COCO instance segmentation, and 1.4% mIoU in ADE20K semantic segmentation. Paired with new frameworks, our large variant is the new state of the art panoptic segmentation model on COCO (58.5 PQ) and ADE20K (49.4 PQ), and instance segmentation model on Cityscapes (45.1 AP) and ADE20K (35.4 AP) (no extra data). It also matches the state of the art specialized semantic segmentation models on ADE20K (58.1 mIoU), and ranks second on Cityscapes (84.5 mIoU) (no extra data).",
+      "authors": [
+        {
+          "name": "Ali Hassani",
+          "affiliation": null
+        },
+        {
+          "name": "Humphrey Shi",
+          "affiliation": null
+        }
+      ],
+      "year": 2022,
+      "published_date": "2022-09-29",
+      "journal": null,
+      "arxiv_url": "http://arxiv.org/abs/2209.15001v3",
+      "pdf_url": "https://arxiv.org/pdf/2209.15001v3",
+      "has_code": true,
+      "code_urls": [
+        "https://github.com/SHI-Labs/Neighborhood-Attention-Transformer",
+        "https://github.com/Omid-Nejati/MedViTV2",
+        "https://github.com/anithabioinformatics-prog/An-Alzheimer-s-disease-classification-model-with-Dilated-Neighborhood-Attention-Transformer-DiNAT-"
+      ],
+      "citation_count": 0,
+      "influential_citation_count": 0,
+      "source": "arxiv",
+      "relevance_score": 1.0,
+      "rank_score": 0.73,
+      "method_category": "注意力机制类",
+      "key_innovation": "提出了膨胀邻域注意力机制，扩展了局部注意力窗口的感受野。",
+      "datasets_used": [
+        "未在摘要中明确提及"
+      ],
+      "key_results": "该模型在视觉任务上表现出色，易于集成到现有框架中。"
+    },
+    {
+      "arxiv_id": "2605.26355v1",
+      "title": "Energy-Gated Attention and Wavelet Positional Encoding: Complementary Inductive Biases for Transformer Attention",
+      "abstract": "Standard transformer attention computes pairwise token similarity but treats all tokens as equally salient and all positions as equally local, regardless of the informational structure of the input. We identify two complementary inductive biases that standard attention lacks: energy salience (which tokens concentrate informational energy, learned end-to-end without explicit frequency decomposition) and scale-selective locality (how far positional influence extends at each frequency, implemented via Morlet wavelet encoding). We address both with two simple components. Energy-Gated Attention (EGA) gates value aggregation by a learned energy estimate of key token embeddings, computed via a single linear projection; it selects what to attend to. Morlet Positional Encoding (MoPE) replaces fixed sinusoidal encodings with learned Gaussian-windowed wavelets that adapt the joint position-frequency localization to the corpus; it specifies where attention operates at each scale. On TinyShakespeare, EGA alone achieves +0.092 validation loss improvement over standard attention (+0.103 over Phase 1-3 baseline); MoPE alone is -0.032 (below baseline as a standalone encoding); but their combination achieves +0.119 -- more than the sum of parts. This superadditivity, observed across two independent training runs, is the central empirical finding: salience and locality are complementary inductive biases, each addressing a gap the other cannot fill alone. Ablations confirm that structured spectral priors (Morlet wavelet gates, scale-initialized heads, fixed sinusoidal PE) consistently underperform their unconstrained learned counterparts, while complementary learned components interact superadditively. All experiments are at small scale (<=6M parameters, character-level benchmarks, single seed); larger-scale multi-seed validation is the most important direction for future work.",
+      "authors": [
+        {
+          "name": "Athanasios Zeris",
+          "affiliation": null
+        }
+      ],
+      "year": 2026,
+      "published_date": "2026-05-25",
+      "journal": null,
+      "arxiv_url": "http://arxiv.org/abs/2605.26355v1",
+      "pdf_url": "https://arxiv.org/pdf/2605.26355v1",
+      "has_code": false,
+      "code_urls": [],
+      "citation_count": 0,
+      "influential_citation_count": 0,
+      "source": "arxiv",
+      "relevance_score": 1.0,
+      "rank_score": 0.55,
+      "method_category": "注意力机制类",
+      "key_innovation": "提出了能量门控注意力和小波位置编码，为Transformer引入互补的归纳偏置。",
+      "datasets_used": [
+        "未在摘要中明确提及"
+      ],
+      "key_results": "该方法解决了标准注意力缺乏能量显著性和位置局部性的问题。"
+    },
+    {
+      "arxiv_id": "2503.02130v2",
+      "title": "Forgetting Transformer: Softmax Attention with a Forget Gate",
+      "abstract": "An essential component of modern recurrent sequence models is the forget gate. While Transformers do not have an explicit recurrent form, we show that a forget gate can be naturally incorporated into Transformers by down-weighting the unnormalized attention scores in a data-dependent way. We name this attention mechanism Forgetting Attention and the resulting model the Forgetting Transformer (FoX). We show that FoX outperforms the Transformer on long-context language modeling, length extrapolation, and short-context downstream tasks, while performing on par with the Transformer on long-context downstream tasks. Moreover, it is compatible with the FlashAttention algorithm and does not require any positional embeddings. Several analyses, including the needle-in-the-haystack test, show that FoX also retains the Transformer's superior long-context capabilities over recurrent sequence models such as Mamba-2, HGRN2, and DeltaNet. We also introduce a \"Pro\" block design that incorporates some common architectural components in recurrent sequence models and find it significantly improves the performance of both FoX and the Transformer. Our code is available at https://github.com/zhixuan-lin/forgetting-transformer.",
+      "authors": [
+        {
+          "name": "Zhixuan Lin",
+          "affiliation": null
+        },
+        {
+          "name": "Evgenii Nikishin",
+          "affiliation": null
+        },
+        {
+          "name": "Xu Owen He",
+          "affiliation": null
+        },
+        {
+          "name": "Aaron Courville",
+          "affiliation": null
+        }
+      ],
+      "year": 2025,
+      "published_date": "2025-03-03",
+      "journal": null,
+      "arxiv_url": "http://arxiv.org/abs/2503.02130v2",
+      "pdf_url": "https://arxiv.org/pdf/2503.02130v2",
+      "has_code": false,
+      "code_urls": [],
+      "citation_count": 0,
+      "influential_citation_count": 0,
+      "source": "arxiv",
+      "relevance_score": 1.0,
+      "rank_score": 0.52,
+      "method_category": "注意力机制类",
+      "key_innovation": "提出了Forgetting Attention机制，通过数据依赖方式降低未归一化注意力分数，在Transformer中引入遗忘门。",
+      "datasets_used": [
+        "未在摘要中明确提及"
+      ],
+      "key_results": "该模型在序列建模中表现出色，兼具长短期记忆能力。"
+    },
+    {
+      "arxiv_id": "2409.17625v3",
+      "title": "Benign Overfitting in Token Selection of Attention Mechanism",
+      "abstract": "Attention mechanism is a fundamental component of the transformer model and plays a significant role in its success. However, the theoretical understanding of how attention learns to select tokens is still an emerging area of research. In this work, we study the training dynamics and generalization ability of the attention mechanism under classification problems with label noise. We show that, with the characterization of signal-to-noise ratio (SNR), the token selection of attention mechanism achieves benign overfitting, i.e., maintaining high generalization performance despite fitting label noise. Our work also demonstrates an interesting delayed acquisition of generalization after an initial phase of overfitting. Finally, we provide experiments to support our theoretical analysis using both synthetic and real-world datasets.",
+      "authors": [
+        {
+          "name": "Keitaro Sakamoto",
+          "affiliation": null
+        },
+        {
+          "name": "Issei Sato",
+          "affiliation": null
+        }
+      ],
+      "year": 2024,
+      "published_date": "2024-09-26",
+      "journal": null,
+      "arxiv_url": "http://arxiv.org/abs/2409.17625v3",
+      "pdf_url": "https://arxiv.org/pdf/2409.17625v3",
+      "has_code": false,
+      "code_urls": [],
+      "citation_count": 0,
+      "influential_citation_count": 0,
+      "source": "arxiv",
+      "relevance_score": 1.0,
+      "rank_score": 0.49,
+      "method_category": "Transformer类",
+      "key_innovation": "从理论上证明了注意力机制在含噪标签分类任务中学习选择token时的良性过拟合现象。",
+      "datasets_used": [
+        "未在摘要中明确提及"
+      ],
+      "key_results": "即便存在标签噪声，注意力机制仍能正确学习token选择。"
+    },
+    {
+      "arxiv_id": "2411.12502v4",
+      "title": "Transformer Neural Processes - Kernel Regression",
+      "abstract": "Neural Processes (NPs) are a rapidly evolving class of models designed to directly model the posterior predictive distribution of stochastic processes. Originally developed as a scalable alternative to Gaussian Processes (GPs), which are limited by $O(n^3)$ runtime complexity, the most accurate modern NPs can often rival GPs but still suffer from an $O(n^2)$ bottleneck due to their attention mechanism. We introduce the Transformer Neural Process - Kernel Regression (TNP-KR), a scalable NP featuring: (1) a Kernel Regression Block (KRBlock), a simple, extensible, and parameter efficient transformer block with complexity $O(n_c^2 + n_c n_t)$, where $n_c$ and $n_t$ are the number of context and test points, respectively; (2) a kernel-based attention bias; and (3) two novel attention mechanisms: scan attention (SA), a memory-efficient scan-based attention that when paired with a kernel-based bias can make TNP-KR translation invariant, and deep kernel attention (DKA), a Performer-style attention that implicitly incoporates a distance bias and further reduces complexity to $O(n_c)$. These enhancements enable both TNP-KR variants to perform inference with 100K context points on over 1M test points in under a minute on a single 24GB GPU. On benchmarks spanning meta regression, Bayesian optimization, image completion, and epidemiology, TNP-KR with DKA outperforms its Performer counterpart on nearly every benchmark, while TNP-KR with SA achieves state-of-the-art results.",
+      "authors": [
+        {
+          "name": "Daniel Jenson",
+          "affiliation": null
+        },
+        {
+          "name": "Jhonathan Navott",
+          "affiliation": null
+        },
+        {
+          "name": "Mengyan Zhang",
+          "affiliation": null
+        },
+        {
+          "name": "Makkunda Sharma",
+          "affiliation": null
+        },
+        {
+          "name": "Elizaveta Semenova",
+          "affiliation": null
+        },
+        {
+          "name": "Seth Flaxman",
+          "affiliation": null
+        }
+      ],
+      "year": 2024,
+      "published_date": "2024-11-19",
+      "journal": null,
+      "arxiv_url": "http://arxiv.org/abs/2411.12502v4",
+      "pdf_url": "https://arxiv.org/pdf/2411.12502v4",
+      "has_code": false,
+      "code_urls": [],
+      "citation_count": 0,
+      "influential_citation_count": 0,
+      "source": "arxiv",
+      "relevance_score": 0.8999999999999999,
+      "rank_score": 0.44999999999999996,
+      "method_category": "Transformer类",
+      "key_innovation": "提出了Transformer Neural Processes - Kernel Regression，提升神经过程的预测精度。",
+      "datasets_used": [
+        "未在摘要中明确提及"
+      ],
+      "key_results": "该方法可媲美高斯过程，同时避免了$O(n^2)$的注意力复杂度瓶颈。"
+    },
+    {
+      "arxiv_id": "2206.03003v2",
+      "title": "Transformer-based Personalized Attention Mechanism for Medical Images with Clinical Records",
+      "abstract": "In medical image diagnosis, identifying the attention region, i.e., the region of interest for which the diagnosis is made, is an important task. Various methods have been developed to automatically identify target regions from given medical images. However, in actual medical practice, the diagnosis is made based not only on the images but also on a variety of clinical records. This means that pathologists examine medical images with some prior knowledge of the patients and that the attention regions may change depending on the clinical records. In this study, we propose a method called the Personalized Attention Mechanism (PersAM), by which the attention regions in medical images are adaptively changed according to the clinical records. The primary idea of the PersAM method is to encode the relationships between the medical images and clinical records using a variant of Transformer architecture. To demonstrate the effectiveness of the PersAM method, we applied it to a large-scale digital pathology problem of identifying the subtypes of 842 malignant lymphoma patients based on their gigapixel whole slide images and clinical records.",
+      "authors": [
+        {
+          "name": "Yusuke Takagi",
+          "affiliation": null
+        },
+        {
+          "name": "Noriaki Hashimoto",
+          "affiliation": null
+        },
+        {
+          "name": "Hiroki Masuda",
+          "affiliation": null
+        },
+        {
+          "name": "Hiroaki Miyoshi",
+          "affiliation": null
+        },
+        {
+          "name": "Koichi Ohshima",
+          "affiliation": null
+        },
+        {
+          "name": "Hidekata Hontani",
+          "affiliation": null
+        },
+        {
+          "name": "Ichiro Takeuchi",
+          "affiliation": null
+        }
+      ],
+      "year": 2022,
+      "published_date": "2022-06-07",
+      "journal": null,
+      "arxiv_url": "http://arxiv.org/abs/2206.03003v2",
+      "pdf_url": "https://arxiv.org/pdf/2206.03003v2",
+      "has_code": false,
+      "code_urls": [],
+      "citation_count": 0,
+      "influential_citation_count": 0,
+      "source": "arxiv",
+      "relevance_score": 1.0,
+      "rank_score": 0.43,
+      "method_category": "注意力机制类",
+      "key_innovation": "提出了基于Transformer的个性化注意力机制，融合医学影像与临床记录。",
+      "datasets_used": [
+        "未在摘要中明确提及"
+      ],
+      "key_results": "该方法有效利用患者临床记录辅助医学图像诊断。"
+    },
+    {
+      "arxiv_id": "2305.11403v5",
+      "title": "Efficient Mixed Transformer for Single Image Super-Resolution",
+      "abstract": "Recently, Transformer-based methods have achieved impressive results in single image super-resolution (SISR). However, the lack of locality mechanism and high complexity limit their application in the field of super-resolution (SR). To solve these problems, we propose a new method, Efficient Mixed Transformer (EMT) in this study. Specifically, we propose the Mixed Transformer Block (MTB), consisting of multiple consecutive transformer layers, in some of which the Pixel Mixer (PM) is used to replace the Self-Attention (SA). PM can enhance the local knowledge aggregation with pixel shifting operations. At the same time, no additional complexity is introduced as PM has no parameters and floating-point operations. Moreover, we employ striped window for SA (SWSA) to gain an efficient global dependency modelling by utilizing image anisotropy. Experimental results show that EMT outperforms the existing methods on benchmark dataset and achieved state-of-the-art performance. The Code is available at https://github.com/Fried-Rice-Lab/FriedRiceLab.",
+      "authors": [
+        {
+          "name": "Ling Zheng",
+          "affiliation": null
+        },
+        {
+          "name": "Jinchen Zhu",
+          "affiliation": null
+        },
+        {
+          "name": "Jinpeng Shi",
+          "affiliation": null
+        },
+        {
+          "name": "Shizhuang Weng",
+          "affiliation": null
+        }
+      ],
+      "year": 2023,
+      "published_date": "2023-05-19",
+      "journal": null,
+      "arxiv_url": "http://arxiv.org/abs/2305.11403v5",
+      "pdf_url": "https://arxiv.org/pdf/2305.11403v5",
+      "has_code": false,
+      "code_urls": [],
+      "citation_count": 0,
+      "influential_citation_count": 0,
+      "source": "arxiv",
+      "relevance_score": 0.8999999999999999,
+      "rank_score": 0.42,
+      "method_category": "Transformer类",
+      "key_innovation": "提出了高效混合Transformer (EMT)，包含混合Transformer块 (MTB) 以增强局部性并降低复杂度。",
+      "datasets_used": [
+        "未在摘要中明确提及"
+      ],
+      "key_results": "该方法在单图像超分辨率任务上取得了显著效果。"
+    },
+    {
+      "arxiv_id": "2601.15305v1",
+      "title": "Gated Sparse Attention: Combining Computational Efficiency with Training Stability for Long-Context Language Models",
+      "abstract": "The computational burden of attention in long-context language models has motivated two largely independent lines of work: sparse attention mechanisms that reduce complexity by attending to selected tokens, and gated attention variants that improve training sta-bility while mitigating the attention sink phenomenon. We observe that these approaches address complementary weaknesses and propose Gated Sparse Attention (GSA), an architecture that realizes the benefits of both. GSA incorporates a gated lightning indexer with sigmoid activations that produce bounded, interpretable selection scores, an adaptive sparsity controller that modulates the number of attended tokens based on local uncertainty, and dual gating at the value and output stages. We establish theoretical foundations for the approach, including complexity analysis, expressiveness results, and convergence guarantees. In experiments with 1.7B parameter models trained on 400B tokens, GSA matches the efficiency of sparse-only baselines (12-16x speedup at 128K context) while achieving the quality gains associated with gated attention: perplexity improves from 6.03 to 5.70, RULER scores at 128K context nearly double, and attention to the first token, a proxy for attention sinks, drops from 47% to under 4%. Training stability improves markedly, with loss spikes reduced by 98%.",
+      "authors": [
+        {
+          "name": "Alfred Shen",
+          "affiliation": null
+        },
+        {
+          "name": "Aaron Shen",
+          "affiliation": null
+        }
+      ],
+      "year": 2026,
+      "published_date": "2026-01-12",
+      "journal": null,
+      "arxiv_url": "http://arxiv.org/abs/2601.15305v1",
+      "pdf_url": "https://arxiv.org/pdf/2601.15305v1",
+      "has_code": false,
+      "code_urls": [],
+      "citation_count": 0,
+      "influential_citation_count": 0,
+      "source": "arxiv",
+      "relevance_score": 0.5,
+      "rank_score": 0.35,
+      "method_category": "注意力机制类",
+      "key_innovation": "提出了门控稀疏注意力机制，结合稀疏注意力和门控注意力以提升长上下文语言模型的计算效率和训练稳定性。",
+      "datasets_used": [
+        "未在摘要中明确提及"
+      ],
+      "key_results": "该方法缓解了注意力汇聚现象，同时保持高效计算。"
+    },
+    {
+      "arxiv_id": "2307.13365v3",
+      "title": "Pay Attention to What You Need",
+      "abstract": "Although large language models (LLMs) have achieved significant success in natural language processing, they still struggle with long-context comprehension. Traditional approaches to mitigating this issue typically rely on fine-tuning or retraining, which is both resource-intensive and challenging to deploy in lightweight industrial settings. In this paper, we investigate the potential to accomplish this without any additional resources. Through an in-depth study of the attention mechanism in LLMs, we propose a method called Scaled ReAttention (SRA) to strengthen LLMs' ability to interpret and retrieve information by strategically manipulating their attention scores during inference. Through extensive experiments, we demonstrate that integrating SRA significantly boosts LLMs' performance on a variety of downstream tasks, highlighting its practical potential for enhancing language understanding without incurring the overhead of traditional training.",
+      "authors": [
+        {
+          "name": "Yifei Gao",
+          "affiliation": null
+        },
+        {
+          "name": "Shaohong Chen",
+          "affiliation": null
+        },
+        {
+          "name": "Lei Wang",
+          "affiliation": null
+        },
+        {
+          "name": "Ruiting Dai",
+          "affiliation": null
+        },
+        {
+          "name": "Ziyun Zhang",
+          "affiliation": null
+        },
+        {
+          "name": "Kerui Ren",
+          "affiliation": null
+        },
+        {
+          "name": "Jiaji Wu",
+          "affiliation": null
+        },
+        {
+          "name": "Jun Cheng",
+          "affiliation": null
+        }
+      ],
+      "year": 2023,
+      "published_date": "2023-07-25",
+      "journal": null,
+      "arxiv_url": "http://arxiv.org/abs/2307.13365v3",
+      "pdf_url": "https://arxiv.org/pdf/2307.13365v3",
+      "has_code": false,
+      "code_urls": [],
+      "citation_count": 0,
+      "influential_citation_count": 0,
+      "source": "arxiv",
+      "relevance_score": 0.7,
+      "rank_score": 0.33999999999999997,
+      "method_category": "注意力机制类",
+      "key_innovation": "研究了无需微调或重训练即可提升LLM长上下文理解能力的方法。",
+      "datasets_used": [
+        "未在摘要中明确提及"
+      ],
+      "key_results": "该方法在轻量级工业场景下有效提升长文本理解性能。"
+    }
+  ],
+  "paper_figures": null
+}
