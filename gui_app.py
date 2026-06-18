@@ -149,7 +149,8 @@ def _run_pipeline_thread(job_id: str, topic: str, max_papers: int, year_range: i
         if not no_poster:
             _update_job(job_id, step="正在生成海报...", progress=92)
             poster_path = job_dir / "poster.svg"
-            generate_svg_poster(papers, topic, review_text, str(evo_path), str(poster_path))
+            generate_svg_poster(papers, topic, review_text, str(evo_path),
+                                str(poster_path), generate_png=True)
 
         # Build paper list data for frontend
         paper_list = []
@@ -187,6 +188,7 @@ def _run_pipeline_thread(job_id: str, topic: str, max_papers: int, year_range: i
                     "evolution": f"/output/{job_id}/evolution.png",
                     "distribution": f"/output/{job_id}/distribution.png",
                     "poster": f"/output/{job_id}/poster.svg" if poster_path else None,
+                    "poster_png": f"/output/{job_id}/poster.png" if poster_path else None,
                 }
             },
         )

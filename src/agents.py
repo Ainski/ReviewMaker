@@ -347,6 +347,7 @@ class VisualizerAgent(BaseAgent):
                 evolution_diagram_path=evo_path,
                 output_path=poster_path,
                 paper_figures=paper_figures if paper_figures else None,
+                generate_png=True,
             )
             state.poster_path = poster_path
             self.log(f"海报: {poster_path}")

@@ -1,8 +1,12 @@
-"""SVG poster generator — creates an academic poster as pure SVG (no PIL dependency).
+"""SVG poster generator — creates an academic poster as pure SVG.
 
 Uses ``xml.etree.ElementTree`` (stdlib) to produce a self-contained SVG with
-embedded images (base64) and CJK-friendly ``<foreignObject>`` text blocks that
-let the browser handle word wrapping automatically.
+embedded images (base64) and ``<text>`` elements with manual word-wrapping
+(no ``<foreignObject>``, so cairosvg PNG conversion works correctly).
+
+PNG generation
+    If ``generate_png=True`` (default), a PNG is produced alongside the SVG
+    using cairosvg.
 """
 
 import base64
@@ -15,6 +19,14 @@ import xml.etree.ElementTree as ET
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
+
+# cairosvg is optional — used for PNG generation
+try:
+    import cairosvg  # noqa: F401
+    _CAIROSVG_OK = True
+except ImportError:
+    _CAIROSVG_OK = False
+    cairosvg = None  # type: ignore
 
 from src.models import Paper
 
@@ -46,7 +58,8 @@ FOOTER_BG = "#E8EAF6"
 
 FONT_FAMILY = (
     "'Microsoft YaHei', 'SimHei', 'PingFang SC', 'Hiragino Sans GB', "
-    "'Noto Sans CJK SC', 'WenQuanYi Zen Hei', sans-serif"
+    "'Noto Sans CJK SC', 'WenQuanYi Zen Hei', "
+    "'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji', sans-serif"
 )
 
 # ===========================================================================
@@ -54,7 +67,7 @@ FONT_FAMILY = (
 # ===========================================================================
 MARGIN = 40
 GAP = 24
-FULL_W = CANVAS_WIDTH - 2 * MARGIN                    # full content width
+FULL_W = CANVAS_WIDTH - 2 * MARGIN
 HEADER_H = 110
 FOOTER_H = 40
 SECTION_GAP = 18
@@ -69,6 +82,9 @@ BODY_SIZE = 15
 SMALL_SIZE = 13
 TABLE_SIZE = 12
 MINI_SIZE = 11
+
+_LINE_SPACING = 1.6
+
 
 # ===========================================================================
 # SVG element builders
@@ -90,30 +106,20 @@ def _rect(x, y, w, h, fill, stroke=None, stroke_width=0) -> ET.Element:
 
 
 def _text(x, y, content, *, font_size=BODY_SIZE, fill=TEXT_COLOR,
-          anchor="start", bold=False) -> ET.Element:
+          anchor="start", bold=False,
+          text_length=None, length_adjust=None) -> ET.Element:
     style = (f"font-family: {FONT_FAMILY}; font-size: {font_size}px; "
              f"font-weight: {'bold' if bold else 'normal'};")
-    el = ET.Element("text", _attrib({
+    attr = {
         "x": str(x), "y": str(y), "fill": fill,
         "text-anchor": anchor, "style": style,
-    }))
+    }
+    if text_length is not None:
+        attr["textLength"] = str(int(text_length))
+        attr["lengthAdjust"] = length_adjust or "spacing"
+    el = ET.Element("text", attr)
     el.text = content
     return el
-
-
-def _foreign_div(x, y, w, h, body_html, *, font_size=BODY_SIZE,
-                 color=TEXT_COLOR, extra_style="") -> ET.Element:
-    """Wrap XHTML in ``<foreignObject>`` for auto-wrapping text."""
-    fo = ET.Element("foreignObject", _attrib({
-        "x": str(x), "y": str(y), "width": str(w), "height": str(h),
-    }))
-    style = (f"font-family: {FONT_FAMILY}; font-size: {font_size}px; "
-             f"line-height: 1.6; color: {color}; "
-             f"width: {w - 8}px; word-wrap: break-word; {extra_style}")
-    xhtml = (f'<div xmlns="http://www.w3.org/1999/xhtml" style="{_escape_attr(style)}">'
-             f'{body_html}</div>')
-    fo.append(ET.fromstring(xhtml))
-    return fo
 
 
 def _section_header(x, y, w, title) -> tuple[ET.Element, int]:
@@ -147,7 +153,137 @@ def _img_to_data_uri(path_or_bytes) -> str:
 
 
 # ===========================================================================
-# Markdown → XHTML
+# Text wrapping (replaces foreignObject — cairosvg-compatible)
+# ===========================================================================
+
+# CJK Unicode ranges — characters that are roughly 1 em wide
+_CJK_RANGES = [
+    (0x4E00, 0x9FFF),    # CJK Unified Ideographs
+    (0x3400, 0x4DBF),    # CJK Extension A
+    (0x20000, 0x2A6DF),  # CJK Extension B
+    (0x2A700, 0x2B73F),  # CJK Extension C
+    (0x2B740, 0x2B81F),  # CJK Extension D
+    (0x2B820, 0x2CEAF),  # CJK Extension E
+    (0xF900, 0xFAFF),    # CJK Compatibility Ideographs
+    (0x2F800, 0x2FA1F),  # CJK Compatibility Supplement
+    (0x3000, 0x303F),    # CJK Symbols and Punctuation
+    (0xFF00, 0xFFEF),    # Halfwidth and Fullwidth Forms
+    (0xFE30, 0xFE4F),    # CJK Compatibility Forms
+    (0x2E80, 0x2EFF),    # CJK Radicals Supplement
+    (0x31C0, 0x31EF),    # CJK Strokes
+    (0x3200, 0x32FF),    # Enclosed CJK Letters and Months
+    (0x3300, 0x33FF),    # CJK Compatibility
+]
+
+
+def _is_cjk(code: int) -> bool:
+    """Return True if *code* is a CJK / full-width Unicode point."""
+    for lo, hi in _CJK_RANGES:
+        if lo <= code <= hi:
+            return True
+    return False
+
+
+def _char_px(ch: str, font_size: int) -> float:
+    """Approximate pixel width of a single character.
+
+    CJK / full-width → 1 em; Latin / digits → 1/3 em (user's ratio).
+    """
+    if _is_cjk(ord(ch)):
+        return font_size
+    return font_size / 3.0
+
+
+def _wrap_text(text: str, max_width: int, font_size: int) -> list[tuple[str, bool]]:
+    """Wrap text into ``(line_text, is_last_of_para)`` tuples.
+
+    Paragraphs are separated by double newlines (``\\n\\n``).  Only the last
+    line of each paragraph is left unjustified.  CJK ≈ 1 em, Latin ≈ 1/3 em.
+    10 CJK chars of right margin.
+    """
+    margin = font_size * 10
+    limit = max_width - margin
+    if limit < font_size * 3:
+        limit = max_width - font_size * 2
+
+    result: list[tuple[str, bool]] = []
+    paragraphs = text.split("\n\n")
+
+    for pi, para in enumerate(paragraphs):
+        # Collapse whitespace and single newlines within a paragraph
+        para = "".join(para.splitlines())
+        para = para.strip()
+        if not para:
+            # Add a blank line spacer between paragraphs
+            if pi > 0 and pi < len(paragraphs) - 1:
+                result.append(("", False))
+            continue
+
+        para_lines: list[str] = []
+        current_line: list[str] = []
+        current_w = 0.0
+        for ch in para:
+            cw = _char_px(ch, font_size)
+            if current_w + cw > limit and current_line:
+                para_lines.append("".join(current_line).strip())
+                current_line = []
+                current_w = 0.0
+            current_line.append(ch)
+            current_w += cw
+        if current_line:
+            para_lines.append("".join(current_line).strip())
+
+        if not para_lines:
+            continue
+
+        for i, line in enumerate(para_lines):
+            is_last = (i == len(para_lines) - 1)
+            result.append((line, is_last))
+
+    return result
+
+
+def _text_block(x, y, w, text, *, font_size=BODY_SIZE, color=TEXT_COLOR,
+                bold=False, max_lines=0,
+                justify=True) -> tuple[ET.Element, int]:
+    """Render wrapped *text* as ``<text>`` elements.
+
+    Non-terminal lines are justified via SVG ``textLength`` /
+    ``lengthAdjust="spacing"`` so the right edge is flush.
+    """
+    g = ET.Element("g", _attrib())
+    pairs = _wrap_text(text, w, font_size)
+    if max_lines > 0:
+        pairs = pairs[:max_lines]
+
+    # Justification target: column width minus left padding
+    justify_target = w - 8 if justify else None
+
+    line_h = int(font_size * _LINE_SPACING)
+    for i, (line, is_last) in enumerate(pairs):
+        kwargs = {}
+        if justify and justify_target and not is_last and len(line) > 5:
+            kwargs["text_length"] = justify_target
+            kwargs["length_adjust"] = "spacing"
+        g.append(_text(x, y + i * line_h + font_size, line,
+                       font_size=font_size, fill=color, bold=bold, **kwargs))
+
+    total_h = len(pairs) * line_h
+    return g, total_h
+
+
+def _draw_heading(x, y, w, heading_text, level, font_size) -> tuple[ET.Element, int]:
+    """Draw a markdown heading (## or ###) as bold text."""
+    g = ET.Element("g", _attrib())
+    color = HEADER_BG if level <= 2 else TEXT_COLOR
+    fs = font_size + 4 if level <= 2 else font_size + 1
+    h, _ = _text_block(x, y, w, heading_text, font_size=fs, color=color, bold=True)
+    g.append(h)
+    return g, fs * _LINE_SPACING
+
+
+# ===========================================================================
+# Markdown → plain text with bold markers
 # ===========================================================================
 
 def _escape(s: str) -> str:
@@ -155,152 +291,274 @@ def _escape(s: str) -> str:
             .replace(">", "&gt;").replace('"', "&quot;"))
 
 
-def _escape_attr(s: str) -> str:
-    return _escape(s)
+def _strip_md(text: str) -> str:
+    """Remove markdown formatting, keep plain text."""
+    # Remove bold markers
+    text = re.sub(r"\*\*(.+?)\*\*", r"\1", text)
+    # Remove italic markers
+    text = re.sub(r"\*(.+?)\*", r"\1", text)
+    text = re.sub(r"_(.+?)_", r"\1", text)
+    return text
 
 
-def _inline_md(text: str) -> str:
-    """``**bold**`` → ``<b>bold</b>`` (call AFTER _escape)."""
-    return re.sub(r"\*\*(.+?)\*\*", r"<b>\1</b>", text)
+def _md_text_to_lines(md_text: str) -> list[dict]:
+    """Parse markdown into a list of {type, text, level} dicts.
 
+    Types: 'h2', 'h3', 'h4', 'table', 'p', 'blank'
+    """
+    blocks = md_text.split("\n\n")
+    result = []
 
-def _md_table_to_html(lines: list[str]) -> str:
-    """Convert markdown table lines to a compact XHTML ``<table>``."""
-    header_cells = [c.strip() for c in lines[0].split("|")[1:-1]]
-    data_lines = lines[2:] if len(lines) > 2 else []
-    ncols = len(header_cells)
-
-    html = (
-        f'<table style="border-collapse: collapse; width: 100%; '
-        f'font-size: {MINI_SIZE}px; margin: 6px 0; '
-        f'table-layout: auto; word-break: break-all;">'
-        '<thead><tr>'
-    )
-    for h in header_cells:
-        html += (
-            f'<th style="background: {TABLE_HEADER_BG}; color: white; '
-            f'padding: 3px 4px; text-align: center; font-size: {MINI_SIZE}px; '
-            f'white-space: nowrap;">{_inline_md(_escape(h))}</th>'
-        )
-    html += '</tr></thead><tbody>'
-    for ri, row in enumerate(data_lines):
-        cells = [c.strip() for c in row.split("|")[1:-1]]
-        # Pad if row has fewer cells than header
-        while len(cells) < ncols:
-            cells.append("")
-        bg = TABLE_ROW_ALT if ri % 2 == 0 else BG_COLOR
-        html += f'<tr style="background: {bg};">'
-        for cell in cells:
-            html += (
-                f'<td style="padding: 2px 4px; border: 1px solid {BORDER_COLOR}; '
-                f'text-align: left; font-size: {MINI_SIZE}px; '
-                f'word-break: break-all;">{_inline_md(_escape(cell))}</td>'
-            )
-        html += '</tr>'
-    html += '</tbody></table>'
-    return html
-
-
-def _md_to_html(text: str, font_size: int) -> str:
-    """Convert markdown to XHTML: ``##``, ``**bold**``, ``|tables|``, paragraphs."""
-    blocks = text.split("\n\n")
-    html_parts = []
     for block in blocks:
-        lines = [l for l in block.strip().split("\n") if l.strip()]
+        lines = [l for l in block.split("\n") if l.strip()]
         if not lines:
+            result.append({"type": "blank", "text": "", "level": 0})
             continue
+
         first = lines[0]
         rest = lines[1:]
 
-        # Table (all lines contain |)
-        if all("|" in l for l in lines) and len(lines) >= 2:
-            html_parts.append(_md_table_to_html(lines))
+        # ## heading
+        if first.startswith("## "):
+            result.append({"type": "h2", "text": _strip_md(first[3:].strip()), "level": 2})
+            if rest:
+                body = "\n".join(_strip_md(l) for l in rest)
+                result.append({"type": "p", "text": body, "level": 0})
             continue
 
-        # **bold sub-heading** + table (e.g. **第1篇：...** followed by |...| rows)
+        # ### heading
+        if first.startswith("### "):
+            result.append({"type": "h3", "text": _strip_md(first[4:].strip()), "level": 3})
+            # Check if rest is a table
+            if rest and len(rest) >= 2 and all("|" in l for l in rest):
+                result.append({"type": "table", "text": "\n".join(rest), "level": 0,
+                               "rows": rest})
+            elif rest:
+                body = "\n".join(_strip_md(l) for l in rest)
+                result.append({"type": "p", "text": body, "level": 0})
+            continue
+
+        # Pure table
+        if all("|" in l for l in lines) and len(lines) >= 2:
+            result.append({"type": "table", "text": "\n".join(lines), "level": 0,
+                           "rows": lines})
+            continue
+
+        # **bold heading** + table
         if (re.match(r"^\*\*.+\*\*$", first)
                 and len(rest) >= 2
                 and all("|" in l for l in rest)):
-            html_parts.append(
-                f'<h4 style="font-size: {font_size + 1}px; color: {HEADER_BG}; '
-                f'margin: 5px 0 1px;">{_inline_md(_escape(first))}</h4>'
-            )
-            html_parts.append(_md_table_to_html(rest))
+            result.append({"type": "h4", "text": _strip_md(first), "level": 4})
+            result.append({"type": "table", "text": "\n".join(rest), "level": 0,
+                           "rows": rest})
             continue
 
-        # ## heading
-        if first.startswith("## "):
-            heading = _inline_md(_escape(first[3:].strip()))
-            html_parts.append(
-                f'<h3 style="font-size: {font_size + 4}px; color: {HEADER_BG}; '
-                f'margin: 5px 0 2px;">{heading}</h3>'
-            )
-            if rest:
-                body = "<br/>".join(_inline_md(_escape(l)) for l in rest)
-                html_parts.append(f'<p style="margin: 2px 0; line-height: 1.6;">{body}</p>')
-            continue
-
-        # **bold sub-heading**
+        # **bold heading**
         if re.match(r"^\*\*.+\*\*$", first):
-            sub = _inline_md(_escape(first))
-            html_parts.append(
-                f'<h4 style="font-size: {font_size + 1}px; color: {HEADER_BG}; '
-                f'margin: 5px 0 1px;">{sub}</h4>'
-            )
+            result.append({"type": "h4", "text": _strip_md(first), "level": 4})
             if rest:
-                body = "<br/>".join(_inline_md(_escape(l)) for l in rest)
-                html_parts.append(f'<p style="margin: 2px 0; line-height: 1.6;">{body}</p>')
+                body = "\n".join(_strip_md(l) for l in rest)
+                result.append({"type": "p", "text": body, "level": 0})
             continue
 
         # Regular paragraph
-        body = "<br/>".join(_inline_md(_escape(l)) for l in lines)
-        html_parts.append(f'<p style="margin: 2px 0; line-height: 1.6;">{body}</p>')
+        body = "\n".join(_strip_md(l) for l in lines)
+        result.append({"type": "p", "text": body, "level": 0})
 
-    return "".join(html_parts)
+    return result
 
 
 # ===========================================================================
-# Height estimation
+# Table rendering as <text> elements
 # ===========================================================================
 
-def _est_abstract_height(text: str) -> int:
-    """Estimate foreignObject height for the abstract block (CSS 2-column)."""
-    chars_per_col = 45      # CJK chars per column line at BODY_SIZE
-    body_line_h = BODY_SIZE * 1.45
-    tbl_line_h = MINI_SIZE * 1.45
+def _calc_col_widths(ncols: int, headers: list[str],
+                     data_lines: list[str], total_w: int,
+                     font_size: int) -> list[int]:
+    """Calculate adaptive column widths based on content length.
 
-    total_h = 0.0
-    for block in text.split("\n\n"):
-        blines = [l for l in block.strip().split("\n") if l.strip()]
-        if not blines:
-            continue
-        first = blines[0]
-        rest = blines[1:]
+    Narrow columns (≤5 chars: years, counts, checkmarks) get tight fit.
+    Wider columns share remaining space proportionally.  Works for any
+    number of columns and any column headers.
+    """
+    char_w = font_size * 0.55
+    # Estimate max content width per column (in characters)
+    col_max_chars = [0] * ncols
+    for ci in range(ncols):
+        texts = [headers[ci]] if ci < len(headers) else []
+        for row in data_lines:
+            cells = [c.strip() for c in row.split("|")[1:-1]]
+            if ci < len(cells):
+                texts.append(_strip_md(cells[ci]))
+        if texts:
+            col_max_chars[ci] = max(len(t) for t in texts)
+        else:
+            col_max_chars[ci] = 3
 
-        # Pure table
-        if all("|" in l for l in blines) and len(blines) >= 2:
-            total_h += len(blines) * tbl_line_h + 12
-            continue
-        # Bold heading + table
-        if (re.match(r"^\*\*.+\*\*$", first)
-                and len(rest) >= 2
-                and all("|" in l for l in rest)):
-            total_h += body_line_h * 1.5 + len(rest) * tbl_line_h + 12
-            continue
-        # ## heading
-        if first.startswith("## "):
-            total_h += body_line_h * 2
-            blines = blines[1:]
-        # Bold sub-heading
-        if blines and re.match(r"^\*\*.+\*\*$", blines[0]):
-            total_h += body_line_h * 1.5
-            blines = blines[1:]
-        # Body lines
-        for line in blines:
-            total_h += max(1, -(-len(line) // chars_per_col)) * body_line_h
+    # Classify: narrow (≤5 chars, e.g. year, count, checkmark) vs wide
+    narrow_mask = [c <= 5 for c in col_max_chars]
+    # Narrow cols get content width + minimal padding
+    narrow_widths = [int(c * char_w) + 8 for c in col_max_chars]
+    narrow_total = sum(w if narrow_mask[i] else 0 for i, w in enumerate(narrow_widths))
 
-    # CSS columns halve the height; +5 lines breathing room
-    return max(280, int(total_h / 2) + int(body_line_h * 5) + 24)
+    # Remaining width for wide columns
+    avail = total_w - narrow_total - ncols * 4  # 4px padding per column
+    wide_indices = [i for i in range(ncols) if not narrow_mask[i]]
+    wide_weights = [col_max_chars[i] * char_w for i in wide_indices]
+    wide_total = sum(wide_weights) if wide_weights else 1
+
+    result = [0] * ncols
+    for i in range(ncols):
+        if narrow_mask[i]:
+            result[i] = narrow_widths[i]
+        else:
+            # Proportionally distribute, cap at 35% of available width
+            wgt = col_max_chars[i] * char_w
+            cap = int(avail * 0.35)
+            result[i] = max(40, min(int(wgt / wide_total * avail) + 4, cap))
+
+    return result
+
+
+def _render_table_svg(x, y, w, rows: list[str], font_size: int) -> tuple[ET.Element, int]:
+    """Render a markdown table as a grid of ``<text>`` elements.
+
+    Column widths adapt to content so long tables don't overflow vertically.
+    Returns ``(group, total_height)``.
+    """
+    g = ET.Element("g", _attrib())
+    if len(rows) < 2:
+        return g, 0
+
+    header_cells = [c.strip() for c in rows[0].split("|")[1:-1]]
+    data_lines = rows[2:] if len(rows) > 2 else []
+    ncols = len(header_cells)
+    if ncols == 0:
+        return g, 0
+
+    # Adaptive column widths
+    col_widths = _calc_col_widths(ncols, header_cells, data_lines, w, font_size)
+
+    fs = font_size
+    header_h = int(fs * _LINE_SPACING) + 10
+    y0 = y
+
+    # Header background
+    g.append(_rect(x, y, w, header_h, TABLE_HEADER_BG))
+
+    # Header cells — left-aligned, single-line
+    cx = x + 4
+    for ci, hdr in enumerate(header_cells):
+        cw = col_widths[ci]
+        avg_cw = fs * 0.55
+        max_chars = max(2, int((cw - 8) / avg_cw))
+        hdr_text = hdr if len(hdr) <= max_chars else hdr[:max_chars]
+        g.append(_text(cx + 2, y + fs + 2, hdr_text,
+                       font_size=fs, fill="#FFFFFF", bold=True))
+        cx += cw
+
+    y += header_h
+    content_start_y = y
+
+    # Data rows — wrap long text to multiple lines
+    line_h = int(fs * _LINE_SPACING)
+    for ri, row in enumerate(data_lines):
+        raw_cells = [c.strip() for c in row.split("|")[1:-1]]
+        while len(raw_cells) < ncols:
+            raw_cells.append("")
+
+        # Wrap each cell, find max lines for this row
+        cell_lines: list[list[str]] = []
+        max_lines = 1
+        for ci, raw in enumerate(raw_cells):
+            cw = col_widths[ci]
+            # Narrow columns: single line
+            if cw < 80:
+                cell_lines.append([str(raw)])
+            else:
+                pairs = _wrap_text(_strip_md(str(raw)), cw - 8, fs)
+                lines = [p[0] for p in pairs if p[0]]
+                if not lines:
+                    lines = [str(raw)]
+                cell_lines.append(lines)
+                max_lines = max(max_lines, len(lines))
+
+        this_row_h = max_lines * line_h + 8
+
+        bg = TABLE_ROW_ALT if ri % 2 == 0 else BG_COLOR
+        g.append(_rect(x, y, w, this_row_h, bg))
+        g.append(_rect(x, y + this_row_h - 1, w, 1, BORDER_COLOR))
+
+        cx = x + 4
+        for ci in range(len(raw_cells)):
+            lines = cell_lines[ci]
+            color = "#4CAF50" if lines[0].strip() == "✓" else TEXT_COLOR
+            for li, line in enumerate(lines):
+                g.append(_text(cx + 2, y + fs + 3 + li * line_h, line,
+                               font_size=fs, fill=color))
+            cx += col_widths[ci]
+
+        y += this_row_h
+
+    return g, y - y0 + 4
+
+
+# ===========================================================================
+# Abstract rendering (<text> with two-column layout approximation)
+# ===========================================================================
+
+def _render_abstract_svg(x, y, w, summary: str) -> tuple[ET.Element, int]:
+    """Render the abstract as wrapped ``<text>`` elements.
+
+    Uses a simple single-column layout (two-column is too complex for <text>).
+    """
+    g = ET.Element("g", _attrib())
+    items = _md_text_to_lines(summary)
+    cy = y
+
+    for item in items:
+        if item["type"] == "blank":
+            cy += BODY_SIZE
+            continue
+
+        elif item["type"] == "h2":
+            hdr_g, hdr_h = _text_block(x, cy, w - 8, item["text"],
+                                       font_size=BODY_SIZE + 4,
+                                       color=HEADER_BG, bold=True,
+                                       justify=False)
+            g.append(hdr_g)
+            cy += hdr_h + 4
+
+        elif item["type"] == "h3":
+            hdr_g, hdr_h = _text_block(x + 8, cy, w - 16, item["text"],
+                                       font_size=BODY_SIZE + 1,
+                                       color=TEXT_COLOR, bold=True,
+                                       justify=False)
+            g.append(hdr_g)
+            cy += hdr_h + 2
+
+        elif item["type"] == "h4":
+            hdr_g, hdr_h = _text_block(x, cy, w - 8, item["text"],
+                                       font_size=BODY_SIZE + 1,
+                                       color=HEADER_BG, bold=True,
+                                       justify=False)
+            g.append(hdr_g)
+            cy += hdr_h + 2
+
+        elif item["type"] == "table":
+            tbl_g, tbl_h = _render_table_svg(x + 4, cy, w - 8,
+                                             item.get("rows", []), MINI_SIZE)
+            g.append(tbl_g)
+            cy += tbl_h + 8
+
+        elif item["type"] == "p":
+            para_g, para_h = _text_block(x + 4, cy, w - 8, item["text"],
+                                         font_size=BODY_SIZE, color=TEXT_COLOR)
+            g.append(para_g)
+            cy += para_h + 6
+
+    total_h = cy - y + 8
+    return g, total_h
 
 
 # ===========================================================================
@@ -327,15 +585,11 @@ def _build_header(topic: str, papers: list[Paper]) -> ET.Element:
 
 
 def _build_abstract(x, y, w, summary: str) -> tuple[ET.Element, int]:
-    """区域: Abstract — full-width with CSS 2-column flow."""
     g, new_y = _section_header(x, y, w, "\U0001F4C4 摘要")
     if summary:
-        html = _md_to_html(summary, BODY_SIZE)
-        block_h = _est_abstract_height(summary)
-        g.append(_foreign_div(x + 10, new_y, w - 20, block_h, html,
-                              font_size=BODY_SIZE, color=TEXT_COLOR,
-                              extra_style=f"column-count: 2; column-gap: {GAP}px;"))
-        new_y += block_h + 12
+        content_g, content_h = _render_abstract_svg(x + 10, new_y, w - 20, summary)
+        g.append(content_g)
+        new_y += content_h + 12
     return g, new_y
 
 
@@ -360,18 +614,25 @@ def _build_stats(x, y, w, papers: list[Paper]) -> tuple[ET.Element, int]:
 
 def _build_top_papers(x, y, w, papers: list[Paper]) -> tuple[ET.Element, int]:
     g, new_y = _section_header(x, y, w, "⭐ 重点论文")
-    items = ""
+    justify_w = w - 8  # target width for justification
     for p in papers[:5]:
-        items += (f'<div style="margin-bottom: 6px;"><b>[{p.first_author} {p.year}]</b> '
-                  f'{_escape(p.short_title[:50])}')
+        # Title line — justify
+        line = f"[{p.first_author} {p.year}] {p.short_title}"
+        bg, bh = _text_block(x + 8, new_y, justify_w, line,
+                             font_size=SMALL_SIZE, color=TEXT_COLOR, bold=True,
+                             justify=True)
+        g.append(bg)
+        new_y += bh
+        # Innovation line — justify
         if p.key_innovation:
-            items += (f'<br/><span style="color: {TEXT_SECONDARY}; font-size: {MINI_SIZE}px;">'
-                      f'    \U0001F4A1 {_escape(p.key_innovation[:70])}</span>')
-        items += '</div>'
-    h = max(80, len(papers[:5]) * 44 + 12)
-    g.append(_foreign_div(x + 8, new_y, w - 16, h, items,
-                          font_size=SMALL_SIZE, color=TEXT_COLOR))
-    new_y += h + 8
+            inno = f"    \U0001F4A1 {p.key_innovation or ''}"
+            ig, ih = _text_block(x + 8, new_y, justify_w, inno,
+                                 font_size=MINI_SIZE, color=TEXT_SECONDARY,
+                                 justify=True)
+            g.append(ig)
+            new_y += ih
+        new_y += 4
+    new_y += 8
     return g, new_y
 
 
@@ -400,46 +661,91 @@ def _build_evolution(x, y, w, evo_path: str) -> tuple[ET.Element, int]:
 
 
 def _build_paper_table(x, y, w, papers: list[Paper]) -> tuple[ET.Element, int]:
-    """Paper summary table — full-width for readability."""
+    """Paper summary table — rendered as <text> elements."""
     g, new_y = _section_header(x, y, w, "\U0001F4CB 论文摘要表")
-    rows = papers
+
+    fs = TABLE_SIZE
     headers = ["#", "论文标题", "年份", "主要创新点", "数据集", "代码"]
+    # Simple layout: narrow cols get tight fit, two main cols split remaining
+    char_w = fs * 0.55
+    fixed = {0: 28, 2: 40, 4: 80, 5: 32}  # #, year, datasets, code (px)
+    fixed_total = sum(fixed.values())
+    col_widths = [0] * 6
+    for i, w_px in fixed.items():
+        col_widths[i] = w_px
+    # Remaining space split equally between title and innovation
+    avail = w - fixed_total - 6 * 4  # 4px padding per column
+    col_widths[1] = avail // 2
+    col_widths[3] = avail - col_widths[1]
 
-    rows_html = '<thead><tr>'
-    for h in headers:
-        rows_html += f'<th>{h}</th>'
-    rows_html += '</tr></thead><tbody>'
+    line_h = int(fs * _LINE_SPACING)
+    header_h = line_h + 10
 
-    for ri, p in enumerate(rows):
+    # Header row — left-aligned (truncate by column width)
+    g.append(_rect(x, new_y, w, header_h, TABLE_HEADER_BG))
+    cx = x + 4
+    for ci, hdr in enumerate(headers):
+        cw = col_widths[ci]
+        avg_cw = fs * 0.55
+        max_chars = max(2, int((cw - 8) / avg_cw))
+        hdr_text = hdr if len(hdr) <= max_chars else hdr[:max_chars]
+        g.append(_text(cx + 2, new_y + fs + 4, hdr_text,
+                       font_size=fs, fill="#FFFFFF", bold=True))
+        cx += cw
+    new_y += header_h
+
+    # Data rows — wrap long text to multiple lines
+    for ri, p in enumerate(papers):
         bg = TABLE_ROW_ALT if ri % 2 == 0 else BG_COLOR
-        rows_html += (
-            f'<tr style="background: {bg};">'
-            f'<td>{ri + 1}</td>'
-            f'<td style="text-align: left;">{_escape(p.short_title[:50])}</td>'
-            f'<td>{p.year}</td>'
-            f'<td style="text-align: left; font-size: {MINI_SIZE}px;">'
-            f'{_escape((p.key_innovation or "")[:45])}</td>'
-            f'<td style="font-size: {MINI_SIZE}px;">'
-            f'{_escape(", ".join(p.datasets_used[:2])) if p.datasets_used else "—"}</td>'
-            f'<td style="color: #4CAF50;">{"✓" if p.has_code else "—"}</td></tr>'
-        )
-    rows_html += '</tbody>'
 
-    css = (
-        f"table {{ border-collapse: collapse; width: 100%; "
-        f"font-family: {FONT_FAMILY}; font-size: {TABLE_SIZE}px; color: {TEXT_COLOR}; "
-        f"table-layout: auto; }}"
-        f"th {{ background: {TABLE_HEADER_BG}; color: white; padding: 5px 6px; "
-        f"font-size: {TABLE_SIZE}px; text-align: center; white-space: nowrap; }}"
-        f"td {{ padding: 4px 5px; border: 1px solid {BORDER_COLOR}; "
-        f"text-align: center; vertical-align: middle; }}"
-        f"tbody tr:nth-child(even) {{ background: {TABLE_ROW_ALT}; }}"
-    )
-    html = f"<style>{css}</style><table>{rows_html}</table>"
-    tbl_h = (len(rows) + 1) * 28 + 32
-    g.append(_foreign_div(x + 6, new_y, w - 12, tbl_h, html,
-                          font_size=TABLE_SIZE, color=TEXT_COLOR))
-    new_y += tbl_h + 8
+        # Prepare raw cell text
+        raw_cells = [
+            str(ri + 1),
+            p.short_title,
+            str(p.year),
+            (p.key_innovation or "—"),
+            ", ".join(p.datasets_used[:2]) if p.datasets_used else "—",
+            "✓" if p.has_code else "—",
+        ]
+
+        # Wrap each wide cell by column pixel width, collect lines
+        cell_lines: list[list[str]] = []
+        max_lines = 1
+        for ci, raw in enumerate(raw_cells):
+            cw = col_widths[ci]
+            # Narrow columns: single line, no wrapping
+            if cw < 80:
+                cell_lines.append([str(raw)])
+            else:
+                # Use _wrap_text for CJK-aware wrapping within column width
+                pairs = _wrap_text(str(raw), cw - 8, fs)
+                lines = [p[0] for p in pairs if p[0]]  # unwrap tuples, skip blanks
+                if not lines:
+                    lines = [str(raw)]
+                cell_lines.append(lines)
+                max_lines = max(max_lines, len(lines))
+
+        # Dynamic row height
+        line_h = int(fs * _LINE_SPACING)
+        this_row_h = max_lines * line_h + 8
+
+        # Row background
+        g.append(_rect(x, new_y, w, this_row_h, bg))
+        g.append(_rect(x, new_y + this_row_h - 1, w, 1, BORDER_COLOR))
+
+        # Render cells
+        cx = x + 4
+        for ci in range(len(raw_cells)):
+            lines = cell_lines[ci]
+            color = "#4CAF50" if raw_cells[ci].strip() == "✓" else TEXT_COLOR
+            for li, line in enumerate(lines):
+                g.append(_text(cx + 2, new_y + fs + 3 + li * line_h, line,
+                               font_size=fs, fill=color))
+            cx += col_widths[ci]
+
+        new_y += this_row_h
+
+    new_y += 8
     return g, new_y
 
 
@@ -518,6 +824,27 @@ def _save_input_snapshot(papers, topic, review_summary, evolution_diagram_path,
 
 
 # ===========================================================================
+# PNG generation (cairosvg)
+# ===========================================================================
+
+
+def _svg_to_png(svg_path: str, png_path: str, scale: float = 3.0) -> bool:
+    """Convert SVG to PNG using cairosvg.  Returns True on success."""
+    if not _CAIROSVG_OK:
+        logger.warning("cairosvg not installed — skipping PNG generation")
+        return False
+
+    try:
+        cairosvg.svg2png(url=svg_path, write_to=png_path, scale=scale)  # type: ignore[name-defined]  # noqa: F821
+        size_kb = os.path.getsize(png_path) / 1024
+        logger.info(f"PNG poster saved: {png_path} ({size_kb:.1f} KB)")
+        return True
+    except Exception as exc:
+        logger.warning(f"PNG generation failed: {exc}")
+        return False
+
+
+# ===========================================================================
 # Public API
 # ===========================================================================
 
@@ -529,8 +856,18 @@ def generate_svg_poster(
     output_path: str = "output/poster.svg",
     dpi: int = 200,
     paper_figures: Optional[list[dict]] = None,
+    generate_png: bool = True,
+    png_scale: float = 3.0,
 ) -> str:
-    """Generate a self-contained SVG academic poster."""
+    """Generate a self-contained SVG academic poster (and optionally PNG).
+
+    Parameters
+    ----------
+    generate_png : bool
+        If True (default), also produce a PNG via cairosvg.
+    png_scale : float
+        Viewport scale factor for PNG output (3.0 → ~4800 px wide).
+    """
     logger.info(f"生成 SVG 海报: '{topic}'")
 
     # Snapshot
@@ -549,7 +886,7 @@ def generate_svg_poster(
     # 1. Header
     svg.append(_build_header(topic, papers))
 
-    # 2. Abstract (full-width, CSS 2-column)
+    # 2. Abstract (full-width)
     g_abs, yc = _build_abstract(_x, content_top, FULL_W, review_summary)
     svg.append(g_abs)
 
@@ -593,4 +930,14 @@ def generate_svg_poster(
     with open(output_path, "w", encoding="utf-8") as f:
         f.write(content)
     logger.info(f"SVG 海报已保存: {output_path}")
+
+    # ---- PNG generation ----
+    if generate_png:
+        png_path = output_path.rsplit(".", 1)[0] + ".png"
+        ok = _svg_to_png(output_path, png_path, scale=png_scale)
+        if ok:
+            logger.info(f"PNG 海报已保存: {png_path}")
+        else:
+            logger.warning("PNG 海报生成失败（SVG 仍可用）")
+
     return output_path

@@ -324,8 +324,12 @@ def run_pipeline(args: argparse.Namespace) -> None:
             review_summary=review_text,
             evolution_diagram_path=evo_path,
             output_path=poster_path,
+            generate_png=True,
         )
         console.print(f"  [green]✓[/green] SVG 海报已保存至 [bold]{poster_path}[/bold]")
+        png_path = poster_path.replace(".svg", ".png")
+        if os.path.exists(png_path):
+            console.print(f"  [green]✓[/green] PNG 海报已保存至 [bold]{png_path}[/bold]")
 
     # ---- Summary ----
     console.print()

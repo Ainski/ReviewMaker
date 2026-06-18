@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="200" viewBox="0 0 800 200">
+  <rect width="800" height="200" fill="#1A237E"/>
+  <text x="400" y="100" fill="white" font-size="48" font-family="Microsoft YaHei, SimHei, sans-serif" text-anchor="middle">文献综述: 测试中文</text>
+</svg>
