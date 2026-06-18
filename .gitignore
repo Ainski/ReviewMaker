@@ -28,6 +28,9 @@ env/
 Thumbs.db
 Desktop.ini
 
+# Env
+.env
+
 # Output
 output/
 
