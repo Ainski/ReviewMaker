@@ -37,3 +37,4 @@ output/
 # Temp files
 tmp_*.py
 *.tmp
+test_*.*
