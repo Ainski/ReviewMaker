@@ -37,4 +37,5 @@ output/
 # Temp files
 tmp_*.py
 *.tmp
-test_*.*
+/test_*.*
+/output/test_poster.*
