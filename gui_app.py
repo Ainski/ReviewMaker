@@ -21,7 +21,7 @@ from config import config
 from src.paper_fetcher import fetch_papers_for_queries
 from src.code_finder import find_code_for_papers
 from src.paper_ranker import rank_papers, filter_papers, rerank_papers_with_llm
-from src.review_generator import generate_review, extract_paper_details
+from src.review_generator import generate_review, extract_paper_details, revise_review
 from src.query_planner import plan_review_query
 from src.citation_manager import generate_bibtex_file, append_references_to_review, validate_citations
 from src.evolution_diagram import generate_evolution_diagram, generate_category_distribution_chart
@@ -44,6 +44,38 @@ def _update_job(job_id: str, **kwargs):
     with _jobs_lock:
         if job_id in _jobs:
             _jobs[job_id].update(kwargs)
+
+
+def _strip_reference_section(review_text: str) -> str:
+    """Remove the auto-appended reference section before revision."""
+    marker = "\n## 参考文献"
+    if marker in review_text:
+        return review_text.split(marker, 1)[0].rstrip()
+    if review_text.startswith("## 参考文献"):
+        return ""
+    return review_text.rstrip()
+
+
+def _paper_dict_to_reference_like_paper(p: dict):
+    """Create a minimal object compatible with citation_manager helpers."""
+    from src.models import Paper, Author
+    arxiv_url = p.get("arxiv_url")
+    arxiv_id = ""
+    if arxiv_url and "/abs/" in arxiv_url:
+        arxiv_id = arxiv_url.rsplit("/abs/", 1)[-1]
+    title = p.get("title", "")
+    return Paper(
+        arxiv_id=arxiv_id or f"paper_{p.get('index', '')}",
+        title=title,
+        abstract="",
+        authors=[Author(name=p.get("first_author") or "Unknown")],
+        year=int(p.get("year") or 0),
+        journal=p.get("venue") or None,
+        arxiv_url=arxiv_url,
+        pdf_url=p.get("pdf_url"),
+        has_code=bool(p.get("has_code")),
+        code_urls=p.get("code_urls") or [],
+    )
 
 
 def _run_pipeline_thread(job_id: str, topic: str, max_papers: int, year_range: int,
@@ -355,6 +387,63 @@ def api_progress(job_id):
         "query_plan": job.get("query_plan"),
         "result": job.get("result"),
     })
+
+
+@app.route("/api/revise", methods=["POST"])
+def api_revise():
+    """Revise the generated review according to a follow-up chat instruction."""
+    data = request.get_json()
+    job_id = (data.get("job_id") or "").strip()
+    instruction = (data.get("instruction") or "").strip()
+    if not job_id:
+        return jsonify({"error": "缺少 job_id"}), 400
+    if not instruction:
+        return jsonify({"error": "请输入修改意见"}), 400
+
+    with _jobs_lock:
+        job = _jobs.get(job_id)
+    if not job or not job.get("result"):
+        return jsonify({"error": "当前没有可修改的综述结果"}), 404
+
+    result = job["result"]
+    current_review = _strip_reference_section(result.get("review_text", ""))
+    papers = result.get("papers", [])
+    if not current_review or not papers:
+        return jsonify({"error": "当前结果缺少综述正文或论文列表，无法修改"}), 400
+
+    try:
+        revised_body = revise_review(
+            current_review=current_review,
+            papers=papers,
+            user_instruction=instruction,
+            api_key=config.deepseek_api_key,
+            model=config.deepseek_model,
+            base_url=config.deepseek_base_url,
+        )
+
+        ref_papers = [_paper_dict_to_reference_like_paper(p) for p in papers]
+        final_review = append_references_to_review(revised_body, ref_papers)
+        validation = validate_citations(revised_body, len(papers))
+
+        result["review_text"] = final_review
+        result["validation"] = {
+            "valid": len(validation["valid_citations"]),
+            "total": len(papers),
+            "missing": list(validation["missing_citations"]),
+        }
+        result.setdefault("revision_history", []).append({
+            "instruction": instruction,
+            "created_at": datetime.now().isoformat(),
+        })
+
+        review_path = OUTPUT_BASE / job_id / "review.md"
+        review_path.write_text(final_review, encoding="utf-8")
+
+        _update_job(job_id, result=result, step="综述已按反馈修改")
+        return jsonify({"result": result})
+    except Exception as e:
+        logger.exception(f"Review revision failed for job {job_id}")
+        return jsonify({"error": str(e)}), 500
 
 
 @app.route("/output/<path:filepath>")

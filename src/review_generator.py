@@ -2,6 +2,7 @@
 
 import logging
 import json
+import re
 from typing import Optional
 
 from openai import OpenAI
@@ -9,6 +10,59 @@ from openai import OpenAI
 from src.models import Paper
 
 logger = logging.getLogger(__name__)
+
+
+COMMON_BENCHMARKS = [
+    "MMLU", "GSM8K", "HumanEval", "MBPP", "MATH", "BBH", "HellaSwag",
+    "ARC", "WinoGrande", "TruthfulQA", "LongBench", "NeedleBench", "L-Eval",
+    "MT-Bench", "Chatbot Arena", "HELM", "AlpacaEval", "ShareGPT", "LMSYS",
+    "WikiText", "C4", "The Pile", "RedPajama", "SlimPajama", "BookCorpus",
+    "ImageNet", "CIFAR-10", "CIFAR-100", "COCO", "MS COCO", "ADE20K",
+    "Cityscapes", "KITTI", "SQuAD", "GLUE", "SuperGLUE", "XNLI", "CoNLL",
+    "SST-2", "MNIST", "Fashion-MNIST", "LibriSpeech", "Common Voice",
+    "SPEC", "MLPerf", "TPC-H", "TPC-DS", "CloudSuite", "TailBench",
+    "A100", "H100", "V100", "L40S", "ShareGPT traces", "production traces",
+]
+
+
+def _dedupe_keep_order(items: list[str]) -> list[str]:
+    seen = set()
+    result = []
+    for item in items:
+        item = str(item or "").strip()
+        if not item:
+            continue
+        key = item.lower()
+        if key not in seen:
+            seen.add(key)
+            result.append(item)
+    return result
+
+
+def extract_datasets_from_evidence(text: str) -> list[str]:
+    """Rule-based fallback for datasets, benchmarks, workloads and traces."""
+    if not text:
+        return []
+
+    found: list[str] = []
+    lower = text.lower()
+    for name in COMMON_BENCHMARKS:
+        if name.lower() in lower:
+            found.append(name)
+
+    context_patterns = [
+        r"(?:dataset|datasets|benchmark|benchmarks|workload|workloads|trace|traces|evaluation on|evaluated on|experiments on)\s+(?:including|include|such as|:)?\s*([A-Z][A-Za-z0-9_\-+/]*(?:\s*,\s*[A-Z][A-Za-z0-9_\-+/]*){0,8})",
+        r"(?:数据集|基准|评测集|工作负载|负载|轨迹|trace|benchmark)[：: ]+([A-Za-z0-9_\-+/]+(?:[、,，]\s*[A-Za-z0-9_\-+/]+){0,8})",
+    ]
+    for pattern in context_patterns:
+        for match in re.findall(pattern, text, flags=re.IGNORECASE):
+            parts = re.split(r"[,，、;/]|\band\b", match)
+            for part in parts:
+                part = part.strip(" .()[]{}")
+                if len(part) >= 2 and re.search(r"[A-Za-z0-9]", part):
+                    found.append(part)
+
+    return _dedupe_keep_order(found)[:12]
 
 
 def _build_paper_context(paper: Paper, index: int) -> str:
@@ -36,7 +90,7 @@ def _build_paper_context(paper: Paper, index: int) -> str:
         f"  摘要: {paper.abstract[:500]}{'...' if len(paper.abstract) > 500 else ''}\n"
         f"  方法类别: {method_category}\n"
         f"  结构化核心创新: {key_innovation}\n"
-        f"  结构化数据集: {datasets}\n"
+        f"  结构化数据集/Benchmark/Workload: {datasets}\n"
         f"  结构化关键结果: {key_results}\n"
         f"  代码状态: {code_info}"
     )
@@ -109,9 +163,9 @@ def _build_user_prompt(
     if include_tables:
         table_instruction = """
 请在第四章或第六章中包含一个代表性工作对比表，列如下：
-| 序号 | 论文 | 年份 | 方法类别 | 主要创新 | 数据集 | 关键结果 | 代码 |
+| 序号 | 论文 | 年份 | 方法类别 | 主要创新 | 数据集/Benchmark/Workload | 关键结果 | 代码 |
 |------|------|------|----------|----------|--------|----------|------|
-表格内容必须优先使用每篇论文的结构化核心创新、结构化数据集、结构化关键结果和代码状态字段。
+表格内容必须优先使用每篇论文的结构化核心创新、结构化数据集/Benchmark/Workload、结构化关键结果和代码状态字段。
 """
 
     return f"""主题：{topic}
@@ -188,6 +242,84 @@ def generate_review(
         raise
 
 
+def _build_revision_paper_context(paper: dict, index: int) -> str:
+    """Build a compact paper context from frontend/job result paper dicts."""
+    code_status = "未找到公开代码"
+    if paper.get("has_code") and paper.get("code_urls"):
+        code_status = f"已找到公开代码: {', '.join(paper.get('code_urls', [])[:1])}"
+    datasets = paper.get("datasets_used") or []
+    if isinstance(datasets, list):
+        datasets = "、".join(datasets) if datasets else "原文摘要未明确说明"
+
+    return (
+        f"论文 [{index}]:\n"
+        f"  标题: {paper.get('title', '')}\n"
+        f"  年份: {paper.get('year', '')}\n"
+        f"  发表期刊/会议: {paper.get('venue', '') or '未获取'}\n"
+        f"  引用数: {paper.get('citations', 0)}\n"
+        f"  方法类别: {paper.get('method_category', '未分类')}\n"
+        f"  结构化核心创新: {paper.get('key_innovation', '') or '原文摘要未明确说明'}\n"
+        f"  结构化数据集/Benchmark/Workload: {datasets}\n"
+        f"  结构化关键结果: {paper.get('key_results', '') or '原文摘要未明确说明'}\n"
+        f"  代码状态: {code_status}"
+    )
+
+
+def revise_review(
+    current_review: str,
+    papers: list[dict],
+    user_instruction: str,
+    api_key: str,
+    model: str = "deepseek-chat",
+    base_url: str = "https://api.deepseek.com",
+) -> str:
+    """
+    Revise an existing review according to a user's natural-language feedback.
+
+    Returns only the revised review body, without the reference list.
+    """
+    if not current_review.strip():
+        return current_review
+    if not user_instruction.strip():
+        return current_review
+
+    paper_context = "\n\n".join(
+        _build_revision_paper_context(paper, i)
+        for i, paper in enumerate(papers, start=1)
+    )
+
+    system_prompt = """你是严谨的中文科研文献综述编辑。请根据用户反馈修改已有综述正文。
+规则：
+1. 只输出修订后的综述正文，不要解释修改过程。
+2. 不要输出参考文献列表，系统会自动追加。
+3. 必须保留正文中的 [1]、[2] 等引用格式，并且引用编号只能对应提供的论文。
+4. 不能编造论文没有提供的数据集、结果、代码或实验结论。
+5. 如果用户要求侧重模型差异、算法演进、应用场景、实验对比等，应调整章节结构和叙述重点。
+6. 段落应保持学术综述风格，避免口语化。"""
+
+    user_prompt = f"""用户修改意见：
+{user_instruction}
+
+当前综述正文：
+{current_review}
+
+可用论文信息：
+{paper_context}
+
+请基于以上内容输出完整修订版综述正文。不要输出参考文献。"""
+
+    client = OpenAI(api_key=api_key, base_url=base_url)
+    response = client.chat.completions.create(
+        model=model,
+        max_tokens=8192,
+        messages=[
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
+        ],
+    )
+    return response.choices[0].message.content or current_review
+
+
 def extract_paper_details(
     papers: list[Paper],
     api_key: str,
@@ -226,10 +358,15 @@ def extract_paper_details(
                 "\n"
                 f"    全文证据片段: {rag_context[:1800]}"
             )
+        evidence_text = f"{p.title}\n{p.abstract}\n{rag_context}"
+        p._dataset_candidates = extract_datasets_from_evidence(evidence_text)  # temporary runtime hint
+        dataset_hint = "、".join(p._dataset_candidates) if p._dataset_candidates else "未通过规则识别到"
+
         paper_list.append(
             f"[{i}] 标题: {p.title}\n"
             f"    年份: {p.year}\n"
             f"    摘要: {p.abstract[:600]}"
+            f"\n    规则识别到的候选数据集/Benchmark/Workload: {dataset_hint}"
             f"{evidence}"
         )
 
@@ -239,10 +376,11 @@ def extract_paper_details(
 
     prompt = f"""请基于每篇论文的{evidence_label}提取以下结构化信息。
 要求非常严格：只能提取证据中明确出现的信息，不要用常识补全。
+所有输出字段必须使用中文表达；论文名、方法名、数据集名、Benchmark 名、指标名、英文缩写和数值可以保留原文。
 
 - key_innovation: 主要算法或方法创新点（一句话，中文）
-- datasets_used: 证据中明确提到的数据集、benchmark 或任务集合名称列表；没有明确名称则返回 []
-- key_results: 证据中明确提到的关键定量结果、效率提升、性能指标或主要发现；没有明确结果则写 "证据未明确说明"
+- datasets_used: 证据中明确提到的数据集、Benchmark、Workload、Trace、评测任务或硬件/系统负载名称列表；例如 MMLU、LongBench、ShareGPT traces、MLPerf、SPEC、A100/H100 workloads。没有明确名称则返回 []
+- key_results: 证据中明确提到的关键定量结果、效率提升、性能指标或主要发现，必须用中文句子概括；数值、倍率、百分比、指标名可以保留原文。没有明确结果则写 "证据未明确说明"
 - method_category: 方法类别标签，如 "Transformer类"、"图神经网络类"、"强化学习类"、"扩散模型类"、"注意力机制类"、"系统优化类" 等
 - evidence_source: 信息主要来自 "摘要"、"全文片段" 或 "摘要+全文片段"
 - confidence: 0 到 1 的置信度，全文片段中有明确数据集/结果时置信度应更高
@@ -253,7 +391,7 @@ def extract_paper_details(
     "index": 1,
     "key_innovation": "...",
     "datasets_used": ["数据集1", "数据集2"],
-    "key_results": "...",
+    "key_results": "该方法在某指标上取得约 3.00 倍加速，同时降低内存开销。",
     "method_category": "...",
     "evidence_source": "...",
     "confidence": 0.8
@@ -283,7 +421,11 @@ def extract_paper_details(
                 idx = detail.get("index", 0) - 1
                 if 0 <= idx < len(papers):
                     papers[idx].key_innovation = detail.get("key_innovation")
-                    papers[idx].datasets_used = detail.get("datasets_used", [])
+                    model_datasets = detail.get("datasets_used", [])
+                    if not isinstance(model_datasets, list):
+                        model_datasets = [str(model_datasets)] if model_datasets else []
+                    rule_datasets = getattr(papers[idx], "_dataset_candidates", [])
+                    papers[idx].datasets_used = _dedupe_keep_order(model_datasets + rule_datasets)
                     papers[idx].key_results = detail.get("key_results")
                     papers[idx].method_category = detail.get("method_category")
                     papers[idx].evidence_source = detail.get("evidence_source")
@@ -298,5 +440,9 @@ def extract_paper_details(
 
     except Exception as e:
         logger.error(f"提取论文详情时出错: {e}")
+
+    for paper in papers:
+        if hasattr(paper, "_dataset_candidates"):
+            delattr(paper, "_dataset_candidates")
 
     return papers

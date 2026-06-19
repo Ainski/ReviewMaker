@@ -1250,7 +1250,7 @@ body {
   flex-direction: column;
 }
 .request-header {
-  padding: 20px 20px 14px;
+  padding: 18px 20px 8px;
   border-bottom: none;
 }
 .request-header h2 {
@@ -1585,7 +1585,6 @@ body {
 <aside class="request-panel">
   <div class="request-header">
     <h2>Chat</h2>
-    <p>输入你的调研需求，Agent 会解析主题、规划检索 query，并在这里反馈检索状态。</p>
   </div>
   <div class="request-body">
     <div class="request-chat" id="request-chat">
@@ -1832,6 +1831,11 @@ function updateAssistantStatusFromProgress(data) {
 }
 
 function startFromRequest() {
+  if (jobResult && currentJobId) {
+    reviseFromRequest();
+    return;
+  }
+
   const input = document.getElementById('input-request');
   const parsed = extractReviewTopic(input?.value || '');
   if (!parsed.rawRequest) {
@@ -1844,6 +1848,7 @@ function startFromRequest() {
   extractedTopic = parsed.topic;
   document.getElementById('input-topic').value = parsed.topic;
   appendChatMessage('user', parsed.rawRequest);
+  if (input) input.value = '';
   assistantStatusMessageId = appendChatMessage(
     'assistant',
     '<div class="chat-section">已收到需求，正在解析主题并规划检索 query...</div>',
@@ -1851,6 +1856,65 @@ function startFromRequest() {
   );
   lastRenderedPlanKey = '';
   startJob();
+}
+
+async function reviseFromRequest() {
+  const input = document.getElementById('input-request');
+  const instruction = (input?.value || '').trim();
+  if (!instruction) {
+    showToast('请输入修改意见', 'error');
+    input?.focus();
+    return;
+  }
+  if (!currentJobId || !jobResult) {
+    showToast('当前没有可修改的综述', 'error');
+    return;
+  }
+
+  appendChatMessage('user', instruction);
+  const reviseMsgId = appendChatMessage(
+    'assistant',
+    '<div class="chat-section">我会基于当前论文列表和综述正文进行定制化修改，不重新检索论文...</div>',
+    { html: true }
+  );
+  input.value = '';
+
+  const btn = document.getElementById('btn-start');
+  btn.disabled = true;
+  btn.textContent = '正在修改...';
+
+  try {
+    const res = await fetch('/api/revise', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        job_id: currentJobId,
+        instruction,
+      }),
+    });
+    const data = await res.json();
+    if (data.error) {
+      updateChatMessage(reviseMsgId, `<div class="chat-notice">修改失败：${escapeHtml(data.error)}</div>`);
+      showToast(data.error, 'error');
+      return;
+    }
+
+    jobResult = data.result;
+    allPapers = data.result?.papers || [];
+    renderResults(data.result);
+    updateChatMessage(
+      reviseMsgId,
+      '<div class="chat-notice success">已根据你的意见修改综述正文。你可以继续提出新的侧重点或修改要求。</div>'
+    );
+    switchTab('tab-review');
+    showToast('综述已修改', 'success');
+  } catch(e) {
+    updateChatMessage(reviseMsgId, `<div class="chat-notice">修改失败：${escapeHtml(e.message)}</div>`);
+    showToast('修改失败: ' + e.message, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '发送修改';
+  }
 }
 
 // ============================================================
@@ -1956,7 +2020,8 @@ async function pollProgress() {
       clearInterval(pollTimer);
       document.getElementById('pulse-dot').classList.remove('active');
       document.getElementById('btn-start').disabled = false;
-      document.getElementById('btn-start').textContent = '重新生成综述';
+      document.getElementById('btn-start').textContent = '发送修改';
+      document.getElementById('input-request').placeholder = '继续输入修改意见，例如：请更侧重比较不同论文模型结构的差异，弱化背景介绍。';
       document.getElementById('pipeline-steps').classList.remove('visible');
       jobResult = data.result;
       allPapers = data.result?.papers || [];
@@ -2096,7 +2161,7 @@ function buildPaperCard(p) {
         <div class="paper-meta">
           <span>${escapeHtml(p.first_author)}</span>
           <span>${p.year}</span>
-          ${p.venue ? `<span>${escapeHtml(p.venue)}</span>` : ''}
+          ${p.venue ? `<span title="${escapeAttr(p.venue)}">${escapeHtml(truncateText(p.venue, 25))}</span>` : ''}
           <span>${p.citations} 引用</span>
           ${cat ? `<span class="badge badge-cat">${escapeHtml(cat)}</span>` : ''}
           ${codeBadge}
@@ -2107,7 +2172,7 @@ function buildPaperCard(p) {
     <div class="paper-details">
       ${p.key_innovation ? `<div class="detail-row"><span class="detail-label">核心创新</span><br>${escapeHtml(p.key_innovation)}</div>` : ''}
       ${p.key_results ? `<div class="detail-row"><span class="detail-label">关键结果</span><br>${escapeHtml(p.key_results)}</div>` : ''}
-      ${p.datasets_used ? `<div class="detail-row"><span class="detail-label">使用数据集</span><br>${escapeHtml(p.datasets_used)}</div>` : ''}
+      ${p.datasets_used ? `<div class="detail-row"><span class="detail-label">数据集 / Benchmark / Workload</span><br>${escapeHtml(p.datasets_used)}</div>` : ''}
       ${p.evidence_source ? `<div class="detail-row"><span class="detail-label">信息来源</span><br>${escapeHtml(p.evidence_source)}</div>` : ''}
       <div class="paper-actions-row">
         <div class="paper-actions-left">
@@ -2129,6 +2194,11 @@ function escapeHtml(str) {
 
 function escapeAttr(str) {
   return String(str || '').replace(/"/g, '&quot;');
+}
+
+function truncateText(str, maxLen = 25) {
+  const text = String(str || '');
+  return text.length > maxLen ? text.slice(0, maxLen) + '...' : text;
 }
 
 function togglePaperCard(card) {
@@ -2205,6 +2275,7 @@ function clearResults() {
   document.getElementById('progress-bar').style.width = '0%';
   document.getElementById('btn-start').disabled = false;
   document.getElementById('btn-start').textContent = '生成综述';
+  document.getElementById('input-request').placeholder = '例如：我想写一篇关于 Transformer 注意力机制在大模型推理优化中的综述，请帮我查找文献并生成综述，重点关注 KV Cache 和 FlashAttention。';
   document.getElementById('btn-clear').disabled = true;
   document.getElementById('pipeline-steps').classList.remove('visible');
   document.getElementById('content-area').classList.remove('has-results');
@@ -2241,7 +2312,7 @@ document.addEventListener('keydown', (e) => {
   // Keyboard shortcut to start job
   if (e.ctrlKey && e.key === 'Enter') {
     e.preventDefault();
-    if (!currentJobId || document.getElementById('btn-start').textContent.includes('重新')) {
+    if (!document.getElementById('btn-start').disabled) {
       startFromRequest();
     }
   }
