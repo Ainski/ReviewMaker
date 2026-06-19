@@ -690,7 +690,7 @@ a:hover { text-decoration: underline; }
   font-size: 0.73rem;
 }
 .paper-details .code-links { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 4px; }
-.paper-details .code-link {
+.paper-details .code-link, .paper-details .paper-link {
   font-size: 0.73rem;
   padding: 3px 10px;
   border-radius: 14px;
@@ -700,7 +700,29 @@ a:hover { text-decoration: underline; }
   text-decoration: none;
   transition: all var(--transition);
 }
-.paper-details .code-link:hover { background: var(--primary-light); text-decoration: none; }
+.paper-details .code-link:hover, .paper-details .paper-link:hover { background: var(--primary-light); text-decoration: none; }
+.paper-actions-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 12px;
+  flex-wrap: wrap;
+}
+.paper-actions-row .code-links {
+  margin-top: 0;
+}
+.paper-actions-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.paper-actions-label {
+  font-size: 0.73rem;
+  font-weight: 600;
+  color: var(--text);
+}
 
 .paper-expand-hint {
   font-size: 0.7rem;
@@ -1854,6 +1876,13 @@ function buildPaperCard(p) {
     ? '<span class="badge badge-code">有代码</span>'
     : '<span class="badge badge-no-code">— 无代码</span>';
   const cat = p.method_category && p.method_category !== '未分类' ? p.method_category : '';
+  const paperLinks = [
+    p.arxiv_url ? `<a class="paper-link" href="${escapeAttr(p.arxiv_url)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">原文链接</a>` : '',
+    p.pdf_url ? `<a class="paper-link" href="${escapeAttr(p.pdf_url)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">PDF</a>` : '',
+  ].filter(Boolean).join('');
+  const codeLinks = p.has_code && p.code_urls && p.code_urls.length > 0
+    ? p.code_urls.map(u => `<a class="code-link" href="${escapeAttr(u)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">${escapeHtml(u.replace(/https?:\/\/github\.com\//,''))}</a>`).join('')
+    : '';
 
   return `<div class="paper-card" data-index="${p.index}" data-title="${p.title.toLowerCase()}" data-author="${p.first_author.toLowerCase()}" data-innovation="${(p.key_innovation||'').toLowerCase()}" data-cat="${cat.toLowerCase()}" onclick="togglePaperCard(this)">
     <div class="paper-header">
@@ -1874,8 +1903,14 @@ function buildPaperCard(p) {
       ${p.key_innovation ? `<div class="detail-row"><span class="detail-label">核心创新</span><br>${escapeHtml(p.key_innovation)}</div>` : ''}
       ${p.key_results ? `<div class="detail-row"><span class="detail-label">关键结果</span><br>${escapeHtml(p.key_results)}</div>` : ''}
       ${p.datasets_used ? `<div class="detail-row"><span class="detail-label">使用数据集</span><br>${escapeHtml(p.datasets_used)}</div>` : ''}
-      ${p.has_code && p.code_urls && p.code_urls.length > 0 ? `<div class="detail-row"><span class="detail-label">代码链接</span><div class="code-links">${p.code_urls.map(u => `<a class="code-link" href="${u}" target="_blank" rel="noopener" onclick="event.stopPropagation()">${u.replace(/https?:\/\/github\.com\//,'')}</a>`).join('')}</div></div>` : ''}
-      <button class="btn-copy" onclick="event.stopPropagation(); copyCitation(${p.index})" title="复制引用">复制引用</button>
+      <div class="paper-actions-row">
+        <div class="paper-actions-left">
+          ${(paperLinks || codeLinks) ? '<span class="paper-actions-label">论文入口</span>' : ''}
+          ${paperLinks ? `<div class="code-links">${paperLinks}</div>` : ''}
+          ${codeLinks ? `<span class="paper-actions-label">代码仓库</span><div class="code-links">${codeLinks}</div>` : ''}
+        </div>
+        <button class="btn-copy" onclick="event.stopPropagation(); copyCitation(${p.index})" title="复制引用">复制引用</button>
+      </div>
     </div>
   </div>`;
 }
@@ -1884,6 +1919,10 @@ function escapeHtml(str) {
   const div = document.createElement('div');
   div.textContent = str;
   return div.innerHTML;
+}
+
+function escapeAttr(str) {
+  return String(str || '').replace(/"/g, '&quot;');
 }
 
 function togglePaperCard(card) {

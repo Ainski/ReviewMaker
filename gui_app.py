@@ -161,6 +161,8 @@ def _run_pipeline_thread(job_id: str, topic: str, max_papers: int, year_range: i
                 "first_author": p.first_author,
                 "year": p.year,
                 "citations": p.citation_count,
+                "arxiv_url": p.arxiv_url,
+                "pdf_url": p.pdf_url,
                 "has_code": p.has_code,
                 "code_urls": p.code_urls,
                 "method_category": p.method_category or "未分类",
