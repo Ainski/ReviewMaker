@@ -2,6 +2,7 @@
 
 import time
 import logging
+import re
 from typing import Optional
 from datetime import datetime, timedelta
 
@@ -21,14 +22,26 @@ ARXIV_SORT_MAP = {
 }
 
 
+def normalize_arxiv_id(arxiv_id: str | None) -> str:
+    """Normalize arXiv identifiers so v1/v2 variants can be merged."""
+    if not arxiv_id:
+        return ""
+
+    normalized = arxiv_id.strip()
+    normalized = normalized.removeprefix("ARXIV:").removeprefix("arXiv:")
+    normalized = normalized.replace("https://arxiv.org/abs/", "")
+    normalized = normalized.replace("http://arxiv.org/abs/", "")
+    normalized = normalized.replace("https://arxiv.org/pdf/", "")
+    normalized = normalized.replace("http://arxiv.org/pdf/", "")
+    normalized = normalized.removesuffix(".pdf")
+    normalized = normalized.split("?")[0].split("#")[0].strip("/")
+    normalized = re.sub(r"v\d+$", "", normalized)
+    return normalized
+
+
 def _arxiv_result_to_paper(result: arxiv.Result) -> Paper:
     """Convert an arxiv.Result to our Paper dataclass."""
-    arxiv_id = result.entry_id.split("/")[-1]
-    # Remove version suffix like v1, v2
-    if "v" in arxiv_id and arxiv_id.split("v")[-1].isdigit():
-        arxiv_id = "v".join(arxiv_id.split("v")[:-1]) if arxiv_id.count("v") > 1 else arxiv_id
-    # Simpler approach
-    arxiv_id_clean = result.entry_id.split("/")[-1]
+    arxiv_id_clean = normalize_arxiv_id(result.entry_id)
 
     authors = [Author(name=a.name) for a in result.authors]
 
@@ -109,7 +122,7 @@ def _ss_result_to_paper(ss_paper: dict) -> Optional[Paper]:
         # Try to extract arxiv_id
         arxiv_id = None
         external_ids = ss_paper.get("externalIds", {}) or {}
-        arxiv_id = external_ids.get("ArXiv")
+        arxiv_id = normalize_arxiv_id(external_ids.get("ArXiv"))
 
         if not arxiv_id:
             # Generate a synthetic ID from Semantic Scholar ID
@@ -204,6 +217,74 @@ def search_semantic_scholar(
     return papers
 
 
+def enrich_papers_with_semantic_scholar(
+    papers: list[Paper],
+    api_key: Optional[str] = None,
+) -> list[Paper]:
+    """
+    Fill citation metadata for arXiv papers via Semantic Scholar's paper batch API.
+
+    Topic search results from arXiv and Semantic Scholar do not always overlap.
+    Looking up exact arXiv IDs is more reliable for citation counts.
+    """
+    arxiv_papers = [
+        p for p in papers
+        if p.arxiv_id and not p.arxiv_id.startswith("ss_")
+    ]
+    if not arxiv_papers:
+        return papers
+
+    headers = {"Accept": "application/json"}
+    if api_key:
+        headers["x-api-key"] = api_key
+
+    url = f"{SEMANTIC_SCHOLAR_API}/paper/batch"
+    fields = (
+        "title,abstract,year,authors,externalIds,"
+        "citationCount,influentialCitationCount,"
+        "publicationDate,journal,publicationVenue"
+    )
+
+    by_arxiv_id = {normalize_arxiv_id(p.arxiv_id): p for p in arxiv_papers}
+    ids = [f"ARXIV:{arxiv_id}" for arxiv_id in by_arxiv_id]
+
+    enriched = 0
+    try:
+        for start in range(0, len(ids), 100):
+            batch_ids = ids[start:start + 100]
+            response = requests.post(
+                url,
+                params={"fields": fields},
+                json={"ids": batch_ids},
+                headers=headers,
+                timeout=30,
+            )
+            response.raise_for_status()
+            for item in response.json() or []:
+                if not item:
+                    continue
+                external_ids = item.get("externalIds", {}) or {}
+                arxiv_id = normalize_arxiv_id(external_ids.get("ArXiv"))
+                paper = by_arxiv_id.get(arxiv_id)
+                if not paper:
+                    continue
+
+                citation_count = item.get("citationCount", 0) or 0
+                influential_count = item.get("influentialCitationCount", 0) or 0
+                if citation_count > paper.citation_count:
+                    paper.citation_count = citation_count
+                if influential_count > paper.influential_citation_count:
+                    paper.influential_citation_count = influential_count
+                if not paper.abstract and item.get("abstract"):
+                    paper.abstract = item["abstract"]
+                enriched += 1
+    except requests.exceptions.RequestException as e:
+        logger.warning(f"Semantic Scholar batch enrichment error: {e}")
+
+    logger.info(f"Semantic Scholar enriched citation metadata for {enriched}/{len(arxiv_papers)} arXiv papers")
+    return papers
+
+
 # --- Unified Search ---
 
 def fetch_papers(
@@ -238,11 +319,16 @@ def fetch_papers(
         year_range=year_range,
     )
     for p in arxiv_papers:
-        key = p.arxiv_id
+        key = normalize_arxiv_id(p.arxiv_id)
         all_papers[key] = p
 
     # Search Semantic Scholar (supplement)
     if include_ss:
+        enrich_papers_with_semantic_scholar(
+            list(all_papers.values()),
+            api_key=api_key,
+        )
+
         time.sleep(0.5)  # Be polite to APIs
         ss_papers = search_semantic_scholar(
             topic=topic,
@@ -251,7 +337,7 @@ def fetch_papers(
             api_key=api_key,
         )
         for p in ss_papers:
-            key = p.arxiv_id
+            key = normalize_arxiv_id(p.arxiv_id)
             if key not in all_papers:
                 all_papers[key] = p
             else:

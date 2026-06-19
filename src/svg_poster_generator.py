@@ -24,9 +24,12 @@ from typing import Optional
 try:
     import cairosvg  # noqa: F401
     _CAIROSVG_OK = True
-except ImportError:
+except Exception as exc:
     _CAIROSVG_OK = False
     cairosvg = None  # type: ignore
+    _CAIROSVG_IMPORT_ERROR = exc
+else:
+    _CAIROSVG_IMPORT_ERROR = None
 
 from src.models import Paper
 
@@ -831,7 +834,10 @@ def _save_input_snapshot(papers, topic, review_summary, evolution_diagram_path,
 def _svg_to_png(svg_path: str, png_path: str, scale: float = 3.0) -> bool:
     """Convert SVG to PNG using cairosvg.  Returns True on success."""
     if not _CAIROSVG_OK:
-        logger.warning("cairosvg not installed — skipping PNG generation")
+        logger.warning(
+            "cairosvg/cairo is unavailable — skipping PNG generation: %s",
+            _CAIROSVG_IMPORT_ERROR,
+        )
         return False
 
     try:
