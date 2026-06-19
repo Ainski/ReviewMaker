@@ -9,19 +9,30 @@ from dotenv import load_dotenv
 load_dotenv()
 
 
+def _clean_optional_env(name: str) -> Optional[str]:
+    """Read optional env vars and ignore placeholders/blank values."""
+    value = os.getenv(name)
+    if value is None:
+        return None
+    value = value.strip()
+    if not value or value.lower() in {"none", "null", "你的 github token", "你的 semantic scholar key"}:
+        return None
+    return value
+
+
 @dataclass
 class Config:
     """Global configuration loaded from environment variables."""
 
     # API Keys
     deepseek_api_key: str = field(
-        default_factory=lambda: os.getenv("DEEPSEEK_API_KEY", "")
+        default_factory=lambda: (os.getenv("DEEPSEEK_API_KEY", "") or "").strip()
     )
     github_token: Optional[str] = field(
-        default_factory=lambda: os.getenv("GITHUB_TOKEN", None)
+        default_factory=lambda: _clean_optional_env("GITHUB_TOKEN")
     )
     semantic_scholar_api_key: Optional[str] = field(
-        default_factory=lambda: os.getenv("SEMANTIC_SCHOLAR_API_KEY", None)
+        default_factory=lambda: _clean_optional_env("SEMANTIC_SCHOLAR_API_KEY")
     )
 
     # DeepSeek API settings

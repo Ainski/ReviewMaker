@@ -18,10 +18,11 @@ PROJECT_ROOT = Path(__file__).parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
 from config import config
-from src.paper_fetcher import fetch_papers
+from src.paper_fetcher import fetch_papers_for_queries
 from src.code_finder import find_code_for_papers
-from src.paper_ranker import rank_papers, filter_papers
+from src.paper_ranker import rank_papers, filter_papers, rerank_papers_with_llm
 from src.review_generator import generate_review, extract_paper_details
+from src.query_planner import plan_review_query
 from src.citation_manager import generate_bibtex_file, append_references_to_review, validate_citations
 from src.evolution_diagram import generate_evolution_diagram, generate_category_distribution_chart
 from src.svg_poster_generator import generate_svg_poster
@@ -47,31 +48,99 @@ def _update_job(job_id: str, **kwargs):
 
 def _run_pipeline_thread(job_id: str, topic: str, max_papers: int, year_range: int,
                           no_code_search: bool, no_poster: bool,
-                          use_rag: bool = False, use_agent: bool = False):
+                          use_rag: bool = False, use_agent: bool = False,
+                          raw_request: str = ""):
     """Run the full pipeline in a background thread, updating job progress."""
     try:
         job_dir = OUTPUT_BASE / job_id
         job_dir.mkdir(parents=True, exist_ok=True)
+        warnings = []
+
+        # Step 0: Plan request
+        _update_job(job_id, status="running", step="正在解析综述需求...", progress=3)
+        query_plan = plan_review_query(
+            raw_request or topic,
+            api_key=config.deepseek_api_key,
+            model=config.deepseek_model,
+            base_url=config.deepseek_base_url,
+        )
+        warnings.extend(query_plan.warnings)
+        topic = query_plan.chinese_topic or query_plan.topic or topic
+        search_topic = query_plan.topic or topic
+        _update_job(
+            job_id,
+            progress=5,
+            step=f"已提取主题: {topic}",
+            query_plan={
+                "topic": query_plan.topic,
+                "chinese_topic": query_plan.chinese_topic,
+                "search_queries": query_plan.normalized_queries(),
+                "focus_keywords": query_plan.focus_keywords,
+                "source": query_plan.source,
+            },
+        )
 
         # Step 1: Fetch
-        _update_job(job_id, status="running", step="正在从 arXiv 抓取论文...", progress=5)
-        papers = fetch_papers(topic=topic, max_results=max_papers, year_range=year_range)
+        _update_job(job_id, status="running", step="正在多 query 检索论文...", progress=8)
+        papers, fetch_warnings, query_stats = fetch_papers_for_queries(
+            plan=query_plan,
+            max_results=max_papers,
+            year_range=year_range,
+            api_key=config.semantic_scholar_api_key,
+        )
+        warnings.extend(fetch_warnings)
         if not papers:
             _update_job(job_id, status="error", message="未找到相关论文，请尝试扩大搜索范围。")
             return
         _update_job(job_id, progress=15, step=f"已获取 {len(papers)} 篇论文")
 
-        # Step 2: Code search
-        if not no_code_search:
-            _update_job(job_id, step="正在 GitHub 搜索代码...", progress=20)
-            papers = find_code_for_papers(papers, github_token=config.github_token)
+        # Code search is intentionally delayed until after ranking/filtering.
+        # Searching every raw candidate is slow and wastes API quota.
         _update_job(job_id, progress=30)
 
         # Step 3: Rank
         _update_job(job_id, step="正在排序论文...", progress=35)
-        papers = rank_papers(papers, topic, year_range=year_range)
-        papers = filter_papers(papers, max_papers=max_papers)
+        ranked_candidates = rank_papers(
+            papers,
+            search_topic,
+            year_range=year_range,
+            focus_keywords=query_plan.focus_keywords,
+            search_queries=query_plan.normalized_queries(),
+        )
+        _update_job(job_id, step="正在进行语义相关性重排...", progress=40)
+        ranked_candidates = rerank_papers_with_llm(
+            ranked_candidates,
+            search_topic,
+            api_key=config.deepseek_api_key,
+            raw_request=raw_request,
+            focus_keywords=query_plan.focus_keywords,
+            model=config.deepseek_model,
+            base_url=config.deepseek_base_url,
+            candidate_limit=max(max_papers * 3, 30),
+        )
+        papers = filter_papers(ranked_candidates, max_papers=max_papers)
+        if len(papers) < max_papers:
+            warnings.append(
+                f"用户请求 {max_papers} 篇论文，系统筛选出 {len(papers)} 篇高相关论文，已继续生成。"
+            )
+        if not papers:
+            papers = ranked_candidates[:min(max_papers, len(ranked_candidates))]
+            warnings.append("严格相关性过滤后没有论文达到阈值，已使用排序最高的候选论文继续生成。")
         _update_job(job_id, progress=45, step=f"已筛选 {len(papers)} 篇论文")
+
+        # Step 3a: Code search on selected papers only
+        if not no_code_search:
+            _update_job(job_id, step=f"正在为 {len(papers)} 篇入选论文搜索代码...", progress=46)
+            papers = find_code_for_papers(
+                papers,
+                github_token=config.github_token,
+                deepseek_api_key=config.deepseek_api_key,
+                deepseek_model=config.deepseek_model,
+                deepseek_base_url=config.deepseek_base_url,
+                scan_pdf=True,
+                verify_with_llm=True,
+                max_workers=3,
+            )
 
         # Step 3b (optional): RAG enrichment
         rag_data = {}
@@ -79,7 +148,11 @@ def _run_pipeline_thread(job_id: str, topic: str, max_papers: int, year_range: i
             _update_job(job_id, step="RAG 增强: 正在下载PDF全文并提取相关内容...", progress=48)
             from src.rag_engine import batch_rag_enrich
             try:
-                rag_data = batch_rag_enrich(papers, topic, max_chunks_per_paper=5)
+                evidence_query = (
+                    f"{search_topic} dataset benchmark experiments evaluation results "
+                    "accuracy latency throughput memory table code github repository"
+                )
+                rag_data = batch_rag_enrich(papers, evidence_query, max_chunks_per_paper=8)
                 num_rag = sum(1 for v in rag_data.values() if v["context"])
                 _update_job(job_id, progress=55, step=f"RAG: {num_rag}/{len(papers)} 篇论文全文提取完成")
             except Exception as e:
@@ -89,7 +162,8 @@ def _run_pipeline_thread(job_id: str, topic: str, max_papers: int, year_range: i
         _update_job(job_id, step="DeepSeek AI 正在提取论文详情...", progress=60)
         papers = extract_paper_details(papers, api_key=config.deepseek_api_key,
                                         model=config.deepseek_model,
-                                        base_url=config.deepseek_base_url)
+                                        base_url=config.deepseek_base_url,
+                                        rag_data=rag_data)
         _update_job(job_id, progress=65)
 
         # Step 4b: Generate review (with RAG if enabled)
@@ -120,11 +194,15 @@ def _run_pipeline_thread(job_id: str, topic: str, max_papers: int, year_range: i
             except Exception:
                 review_text = generate_review(papers, topic, api_key=config.deepseek_api_key,
                                               model=config.deepseek_model,
-                                              base_url=config.deepseek_base_url)
+                                              base_url=config.deepseek_base_url,
+                                              raw_request=raw_request,
+                                              focus_keywords=query_plan.focus_keywords)
         else:
             review_text = generate_review(papers, topic, api_key=config.deepseek_api_key,
                                            model=config.deepseek_model,
-                                           base_url=config.deepseek_base_url)
+                                           base_url=config.deepseek_base_url,
+                                           raw_request=raw_request,
+                                           focus_keywords=query_plan.focus_keywords)
         validation = validate_citations(review_text, len(papers))
         final_review = append_references_to_review(review_text, papers)
 
@@ -160,6 +238,7 @@ def _run_pipeline_thread(job_id: str, topic: str, max_papers: int, year_range: i
                 "title": p.title,
                 "first_author": p.first_author,
                 "year": p.year,
+                "venue": p.journal or "",
                 "citations": p.citation_count,
                 "arxiv_url": p.arxiv_url,
                 "pdf_url": p.pdf_url,
@@ -169,6 +248,8 @@ def _run_pipeline_thread(job_id: str, topic: str, max_papers: int, year_range: i
                 "key_innovation": p.key_innovation or "",
                 "datasets_used": p.datasets_used,
                 "key_results": p.key_results or "",
+                "evidence_source": p.evidence_source or "",
+                "detail_confidence": p.detail_confidence,
             })
 
         _update_job(job_id,
@@ -178,6 +259,16 @@ def _run_pipeline_thread(job_id: str, topic: str, max_papers: int, year_range: i
             result={
                 "review_text": final_review,
                 "paper_count": len(papers),
+                "requested_count": max_papers,
+                "warnings": warnings,
+                "query_plan": {
+                    "topic": query_plan.topic,
+                    "chinese_topic": query_plan.chinese_topic,
+                    "search_queries": query_plan.normalized_queries(),
+                    "focus_keywords": query_plan.focus_keywords,
+                    "source": query_plan.source,
+                    "query_stats": query_stats,
+                },
                 "papers": paper_list,
                 "validation": {
                     "valid": len(validation["valid_citations"]),
@@ -213,6 +304,9 @@ def api_start():
     """Start a new review job."""
     data = request.get_json()
     topic = data.get("topic", "").strip()
+    raw_request = data.get("raw_request", "").strip()
+    if not topic and raw_request:
+        topic = raw_request
     if not topic:
         return jsonify({"error": "请输入研究主题"}), 400
 
@@ -238,7 +332,7 @@ def api_start():
 
     thread = threading.Thread(
         target=_run_pipeline_thread,
-        args=(job_id, topic, max_papers, year_range, no_code_search, no_poster, use_rag, use_agent),
+        args=(job_id, topic, max_papers, year_range, no_code_search, no_poster, use_rag, use_agent, raw_request),
         daemon=True,
     )
     thread.start()
@@ -258,6 +352,7 @@ def api_progress(job_id):
         "progress": job["progress"],
         "step": job["step"],
         "message": job.get("message", ""),
+        "query_plan": job.get("query_plan"),
         "result": job.get("result"),
     })
 

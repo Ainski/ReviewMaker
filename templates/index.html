@@ -505,9 +505,22 @@ a:hover { text-decoration: underline; }
 .markdown-body h2 { font-size: 1.2rem; margin: 28px 0 12px; color: var(--primary); }
 .markdown-body h3 { font-size: 1.05rem; margin: 22px 0 10px; }
 .markdown-body p { margin: 12px 0; }
-.markdown-body table { width: 100%; border-collapse: collapse; margin: 18px 0; font-size: 0.85rem; border-radius: var(--radius-sm); overflow: hidden; }
-.markdown-body th { background: var(--primary); color: white; padding: 10px 14px; text-align: left; font-weight: 600; }
-.markdown-body td { padding: 9px 14px; border-bottom: 1px solid var(--border); background: var(--surface); }
+#review-content > p {
+  text-indent: 2em;
+}
+#review-content h2:last-of-type + ul,
+#review-content h2:last-of-type + ol {
+  padding-left: 0;
+  list-style: none;
+}
+#review-content h2:last-of-type + ul li,
+#review-content h2:last-of-type + ol li {
+  text-indent: 0;
+  margin: 10px 0;
+}
+.markdown-body table { width: 100%; border-collapse: collapse; margin: 18px 0; font-size: 0.85rem; border-radius: var(--radius-sm); overflow: hidden; border: 1px solid var(--border); }
+.markdown-body th { background: #F4F3F1; color: var(--text); padding: 10px 14px; text-align: left; font-weight: 700; border-bottom: 1px solid var(--border); }
+.markdown-body td { padding: 9px 14px; border-bottom: 1px solid var(--border); background: var(--surface); color: var(--text-secondary); }
 .markdown-body tr:last-child td { border-bottom: none; }
 .markdown-body tr:nth-child(even) td { background: var(--bg-alt); }
 .markdown-body strong { color: var(--text); }
@@ -1088,7 +1101,7 @@ body {
   box-shadow: 0 10px 35px rgba(30, 28, 25, 0.04);
 }
 .markdown-body h2 { color: var(--text); }
-.markdown-body th { background: #171717; }
+.markdown-body th { background: #F4F3F1; color: var(--text); }
 
 .empty-state {
   align-items: stretch;
@@ -1255,11 +1268,107 @@ body {
   padding: 16px;
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 12px;
+  min-height: 0;
+}
+.request-chat {
+  flex: 1;
+  overflow-y: auto;
+  padding: 2px 2px 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 260px;
+}
+.chat-message {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.chat-message.user {
+  align-items: flex-end;
+}
+.chat-message.assistant {
+  align-items: flex-start;
+}
+.chat-label {
+  font-size: 0.68rem;
+  color: var(--text-muted);
+  padding: 0 4px;
+}
+.chat-bubble {
+  max-width: 96%;
+  padding: 12px 13px;
+  border-radius: 14px;
+  font-size: 0.82rem;
+  line-height: 1.65;
+  border: 1px solid var(--border);
+  background: #fff;
+  color: var(--text-secondary);
+  box-shadow: var(--shadow-sm);
+}
+.chat-message.user .chat-bubble {
+  background: var(--text);
+  color: #fff;
+  border-color: var(--text);
+  border-bottom-right-radius: 6px;
+}
+.chat-message.assistant .chat-bubble {
+  border-bottom-left-radius: 6px;
+}
+.chat-bubble strong {
+  color: var(--text);
+}
+.chat-message.user .chat-bubble strong {
+  color: #fff;
+}
+.chat-section {
+  margin-top: 8px;
+}
+.chat-section:first-child {
+  margin-top: 0;
+}
+.chat-section-title {
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 6px;
+}
+.chat-chip-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+.chat-chip {
+  display: inline-flex;
+  padding: 4px 9px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: #FBFAF8;
+  color: var(--text-muted);
+  font-size: 0.74rem;
+}
+.chat-notice {
+  margin-top: 8px;
+  padding: 9px 10px;
+  border-radius: 10px;
+  border: 1px solid #E8DDC8;
+  background: #FFF8ED;
+  color: #805F2B;
+}
+.chat-notice.success {
+  border-color: #CFE9DB;
+  background: #F1FBF5;
+  color: #276A4F;
+}
+.composer {
+  border-top: 1px solid var(--border-light);
+  padding-top: 12px;
 }
 .request-textarea {
   width: 100%;
-  min-height: 220px;
+  min-height: 116px;
+  max-height: 220px;
   resize: vertical;
   padding: 14px;
   border: 1px solid var(--border);
@@ -1276,25 +1385,8 @@ body {
   box-shadow: 0 0 0 3px var(--primary-light);
   background: #fff;
 }
-.extracted-topic {
-  padding: 12px;
-  border: 1px solid var(--border-light);
-  border-radius: 12px;
-  background: #F8F7F5;
-}
-.extracted-topic .label {
-  color: var(--text-muted);
-  font-size: 0.72rem;
-  margin-bottom: 6px;
-}
-.extracted-topic .value {
-  color: var(--text);
-  font-size: 0.84rem;
-  line-height: 1.5;
-  min-height: 20px;
-}
 .request-actions {
-  margin-top: auto;
+  margin-top: 10px;
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -1492,23 +1584,27 @@ body {
 <!-- ====== REQUEST PANEL ====== -->
 <aside class="request-panel">
   <div class="request-header">
-    <h2>综述需求</h2>
-    <p>输入你的综述主题、研究方向和重点要求，Agent 会提取主题并启动生成流程。</p>
+    <h2>Chat</h2>
+    <p>输入你的调研需求，Agent 会解析主题、规划检索 query，并在这里反馈检索状态。</p>
   </div>
   <div class="request-body">
-    <textarea
-      class="request-textarea"
-      id="input-request"
-      placeholder="例如：我想写一篇关于 Transformer 注意力机制在大模型推理优化中的综述，请帮我查找文献并生成综述，重点关注 KV Cache 和 FlashAttention。"
-      oninput="previewExtractedTopic()"
-    ></textarea>
-    <div class="extracted-topic">
-      <div class="label">当前提取主题</div>
-      <div class="value" id="extracted-topic-text">等待输入需求</div>
+    <div class="request-chat" id="request-chat">
+      <div class="chat-message assistant">
+        <div class="chat-label">ReviewMaker</div>
+        <div class="chat-bubble">你好，我可以帮你把自然语言需求转换成综述主题、检索 query 和关注重点。输入想调研的方向后点击“生成综述”。</div>
+      </div>
     </div>
-    <div class="request-actions">
-      <button class="btn btn-primary" id="btn-start" onclick="startFromRequest()">生成综述</button>
-      <button class="btn btn-ghost" id="btn-clear" onclick="clearResults()" disabled>清除结果</button>
+    <div class="composer">
+      <textarea
+        class="request-textarea"
+        id="input-request"
+        placeholder="例如：我想写一篇关于 Transformer 注意力机制在大模型推理优化中的综述，请帮我查找文献并生成综述，重点关注 KV Cache 和 FlashAttention。"
+        oninput="previewExtractedTopic()"
+      ></textarea>
+      <div class="request-actions">
+        <button class="btn btn-primary" id="btn-start" onclick="startFromRequest()">生成综述</button>
+        <button class="btn btn-ghost" id="btn-clear" onclick="clearResults()" disabled>清除结果</button>
+      </div>
     </div>
   </div>
 </aside>
@@ -1524,6 +1620,8 @@ let allPapers = [];
 let activeCatFilter = null;
 let requestText = '';
 let extractedTopic = '';
+let assistantStatusMessageId = '';
+let lastRenderedPlanKey = '';
 
 // ============================================================
 // TOAST NOTIFICATIONS
@@ -1650,6 +1748,89 @@ function previewExtractedTopic() {
   if (target) target.textContent = parsed.topic || '等待输入需求';
 }
 
+function scrollChatToBottom() {
+  const chat = document.getElementById('request-chat');
+  if (chat) chat.scrollTop = chat.scrollHeight;
+}
+
+function appendChatMessage(role, content, options = {}) {
+  const chat = document.getElementById('request-chat');
+  if (!chat) return '';
+  const id = options.id || `chat-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  const msg = document.createElement('div');
+  msg.className = `chat-message ${role}`;
+  msg.id = id;
+  const label = role === 'user' ? '你' : 'ReviewMaker';
+  const body = options.html ? content : escapeHtml(content).replace(/\n/g, '<br>');
+  msg.innerHTML = `<div class="chat-label">${label}</div><div class="chat-bubble">${body}</div>`;
+  chat.appendChild(msg);
+  scrollChatToBottom();
+  return id;
+}
+
+function updateChatMessage(id, html) {
+  const msg = document.getElementById(id);
+  if (!msg) return;
+  const bubble = msg.querySelector('.chat-bubble');
+  if (bubble) bubble.innerHTML = html;
+  scrollChatToBottom();
+}
+
+function buildPlanChatHtml(resultOrProgress = {}) {
+  const result = resultOrProgress.result || resultOrProgress;
+  const plan = result.query_plan || resultOrProgress.query_plan || {};
+  const warnings = result.warnings || [];
+  const queries = plan.search_queries || [];
+  const focus = plan.focus_keywords || [];
+  const requested = result.requested_count;
+  const count = result.paper_count;
+
+  let html = '';
+  if (plan.chinese_topic || plan.topic) {
+    html += `<div class="chat-section"><div class="chat-section-title">提取主题</div>${escapeHtml(plan.chinese_topic || plan.topic)}</div>`;
+  } else {
+    html += '<div class="chat-section">正在解析你的综述需求...</div>';
+  }
+
+  if (queries.length) {
+    html += '<div class="chat-section"><div class="chat-section-title">检索 Query</div><div class="chat-chip-list">';
+    html += queries.map(q => `<span class="chat-chip">${escapeHtml(q)}</span>`).join('');
+    html += '</div></div>';
+  }
+
+  if (focus.length) {
+    html += '<div class="chat-section"><div class="chat-section-title">关注重点</div><div class="chat-chip-list">';
+    html += focus.map(k => `<span class="chat-chip">${escapeHtml(k)}</span>`).join('');
+    html += '</div></div>';
+  }
+
+  if (typeof count === 'number' && typeof requested === 'number') {
+    if (count >= requested) {
+      html += `<div class="chat-notice success">已检索到与主题高度相关论文 ${count} 篇，达到你设置的 ${requested} 篇目标。</div>`;
+    } else {
+      html += `<div class="chat-notice">仅筛选出 ${count} 篇高相关论文，少于你设置的 ${requested} 篇，系统已继续生成综述。</div>`;
+    }
+  } else {
+    html += '<div class="chat-notice success">已开始解析需求并检索候选论文，我会在完成后更新检索数量。</div>';
+  }
+
+  warnings
+    .filter(w => !/用户请求|仅检索到|少于请求/.test(w))
+    .forEach(w => {
+      html += `<div class="chat-notice">${escapeHtml(w)}</div>`;
+    });
+
+  return html;
+}
+
+function updateAssistantStatusFromProgress(data) {
+  if (!assistantStatusMessageId || !data.query_plan || data.result) return;
+  const key = JSON.stringify(data.query_plan);
+  if (key === lastRenderedPlanKey) return;
+  lastRenderedPlanKey = key;
+  updateChatMessage(assistantStatusMessageId, buildPlanChatHtml(data));
+}
+
 function startFromRequest() {
   const input = document.getElementById('input-request');
   const parsed = extractReviewTopic(input?.value || '');
@@ -1662,7 +1843,13 @@ function startFromRequest() {
   requestText = parsed.rawRequest;
   extractedTopic = parsed.topic;
   document.getElementById('input-topic').value = parsed.topic;
-  document.getElementById('extracted-topic-text').textContent = parsed.topic;
+  appendChatMessage('user', parsed.rawRequest);
+  assistantStatusMessageId = appendChatMessage(
+    'assistant',
+    '<div class="chat-section">已收到需求，正在解析主题并规划检索 query...</div>',
+    { html: true }
+  );
+  lastRenderedPlanKey = '';
   startJob();
 }
 
@@ -1699,6 +1886,7 @@ async function startJob() {
 
   const config = {
     topic: topic,
+    raw_request: requestText || document.getElementById('input-request')?.value.trim() || topic,
     max_papers: parseInt(document.getElementById('input-max-papers').value) || 15,
     year_range: parseInt(document.getElementById('input-year-range').value) || 5,
     no_code_search: document.getElementById('input-no-code').checked,
@@ -1716,6 +1904,9 @@ async function startJob() {
     const data = await res.json();
     if (data.error) {
       showToast(data.error, 'error');
+      if (assistantStatusMessageId) {
+        updateChatMessage(assistantStatusMessageId, `<div class="chat-notice">${escapeHtml(data.error)}</div>`);
+      }
       btn.disabled = false;
       btn.textContent = '生成综述';
       return;
@@ -1741,6 +1932,9 @@ async function startJob() {
     pollTimer = setInterval(pollProgress, 800);
   } catch(e) {
     showToast('启动失败: ' + e.message, 'error');
+    if (assistantStatusMessageId) {
+      updateChatMessage(assistantStatusMessageId, `<div class="chat-notice">启动失败：${escapeHtml(e.message)}</div>`);
+    }
     btn.disabled = false;
     btn.textContent = '生成综述';
   }
@@ -1756,6 +1950,7 @@ async function pollProgress() {
     document.getElementById('status-progress').textContent = Math.round(data.progress) + '%';
     document.getElementById('progress-bar').style.width = data.progress + '%';
     updatePipelineStep(data.progress);
+    updateAssistantStatusFromProgress(data);
 
     if (data.status === 'done') {
       clearInterval(pollTimer);
@@ -1766,6 +1961,9 @@ async function pollProgress() {
       jobResult = data.result;
       allPapers = data.result?.papers || [];
       renderResults(data.result);
+      if (assistantStatusMessageId) {
+        updateChatMessage(assistantStatusMessageId, buildPlanChatHtml(data.result));
+      }
       showToast('综述生成完成！', 'success');
     } else if (data.status === 'error') {
       clearInterval(pollTimer);
@@ -1775,6 +1973,12 @@ async function pollProgress() {
       document.getElementById('pipeline-steps').classList.remove('visible');
       const msg = '错误: ' + (data.message || '未知错误');
       document.getElementById('status-text').textContent = msg;
+      if (assistantStatusMessageId) {
+        updateChatMessage(
+          assistantStatusMessageId,
+          `<div class="chat-notice">生成过程中遇到错误：${escapeHtml(data.message || '未知错误')}</div>`
+        );
+      }
       showToast(data.message || '发生未知错误', 'error');
     }
   } catch(e) {
@@ -1892,6 +2096,7 @@ function buildPaperCard(p) {
         <div class="paper-meta">
           <span>${escapeHtml(p.first_author)}</span>
           <span>${p.year}</span>
+          ${p.venue ? `<span>${escapeHtml(p.venue)}</span>` : ''}
           <span>${p.citations} 引用</span>
           ${cat ? `<span class="badge badge-cat">${escapeHtml(cat)}</span>` : ''}
           ${codeBadge}
@@ -1903,6 +2108,7 @@ function buildPaperCard(p) {
       ${p.key_innovation ? `<div class="detail-row"><span class="detail-label">核心创新</span><br>${escapeHtml(p.key_innovation)}</div>` : ''}
       ${p.key_results ? `<div class="detail-row"><span class="detail-label">关键结果</span><br>${escapeHtml(p.key_results)}</div>` : ''}
       ${p.datasets_used ? `<div class="detail-row"><span class="detail-label">使用数据集</span><br>${escapeHtml(p.datasets_used)}</div>` : ''}
+      ${p.evidence_source ? `<div class="detail-row"><span class="detail-label">信息来源</span><br>${escapeHtml(p.evidence_source)}</div>` : ''}
       <div class="paper-actions-row">
         <div class="paper-actions-left">
           ${(paperLinks || codeLinks) ? '<span class="paper-actions-label">论文入口</span>' : ''}
