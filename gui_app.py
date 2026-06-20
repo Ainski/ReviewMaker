@@ -180,7 +180,7 @@ def _run_pipeline_thread(job_id: str, topic: str, max_papers: int, year_range: i
             _update_job(job_id, step="正在生成海报...", progress=92)
             poster_path = job_dir / "poster.svg"
             generate_svg_poster(papers, topic, review_text, str(evo_path), str(poster_path),
-                                lineage_caption=poster_caption)
+                                generate_png=True)
 
         # Build paper list data for frontend
         paper_list = []
