@@ -9,30 +9,19 @@ from dotenv import load_dotenv
 load_dotenv()
 
 
-def _clean_optional_env(name: str) -> Optional[str]:
-    """Read optional env vars and ignore placeholders/blank values."""
-    value = os.getenv(name)
-    if value is None:
-        return None
-    value = value.strip()
-    if not value or value.lower() in {"none", "null", "你的 github token", "你的 semantic scholar key"}:
-        return None
-    return value
-
-
 @dataclass
 class Config:
     """Global configuration loaded from environment variables."""
 
     # API Keys
     deepseek_api_key: str = field(
-        default_factory=lambda: (os.getenv("DEEPSEEK_API_KEY", "") or "").strip()
+        default_factory=lambda: os.getenv("DEEPSEEK_API_KEY", "")
     )
     github_token: Optional[str] = field(
-        default_factory=lambda: _clean_optional_env("GITHUB_TOKEN")
+        default_factory=lambda: os.getenv("GITHUB_TOKEN", None)
     )
     semantic_scholar_api_key: Optional[str] = field(
-        default_factory=lambda: _clean_optional_env("SEMANTIC_SCHOLAR_API_KEY")
+        default_factory=lambda: os.getenv("SEMANTIC_SCHOLAR_API_KEY", None)
     )
 
     # DeepSeek API settings
@@ -47,7 +36,16 @@ class Config:
     output_dir: str = "output"
 
     # Model settings
-    deepseek_model: str = "deepseek-chat"  # or "deepseek-reasoner" for reasoning tasks
+    deepseek_model: str = "deepseek-v4-pro"  # or "deepseek-reasoner" for reasoning tasks
+
+    # OpenAlex / lineage-graph settings
+    openalex_base_url: str = "https://api.openalex.org"
+    openalex_mailto: str = field(
+        default_factory=lambda: os.getenv("OPENALEX_MAILTO", "reviewmaker@example.com")
+    )
+    lineage_max_nodes: int = 25
+    lineage_max_ancestors: int = 8
+    lineage_min_ancestor_share: int = 2
 
     def ensure_api_keys(self) -> None:
         """Validate that required API keys are set."""

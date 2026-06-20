@@ -2,7 +2,6 @@
 
 import logging
 import json
-import re
 from typing import Optional
 
 from openai import OpenAI
@@ -12,73 +11,15 @@ from src.models import Paper
 logger = logging.getLogger(__name__)
 
 
-COMMON_BENCHMARKS = [
-    "MMLU", "GSM8K", "HumanEval", "MBPP", "MATH", "BBH", "HellaSwag",
-    "ARC", "WinoGrande", "TruthfulQA", "LongBench", "NeedleBench", "L-Eval",
-    "MT-Bench", "Chatbot Arena", "HELM", "AlpacaEval", "ShareGPT", "LMSYS",
-    "WikiText", "C4", "The Pile", "RedPajama", "SlimPajama", "BookCorpus",
-    "ImageNet", "CIFAR-10", "CIFAR-100", "COCO", "MS COCO", "ADE20K",
-    "Cityscapes", "KITTI", "SQuAD", "GLUE", "SuperGLUE", "XNLI", "CoNLL",
-    "SST-2", "MNIST", "Fashion-MNIST", "LibriSpeech", "Common Voice",
-    "SPEC", "MLPerf", "TPC-H", "TPC-DS", "CloudSuite", "TailBench",
-    "A100", "H100", "V100", "L40S", "ShareGPT traces", "production traces",
-]
-
-
-def _dedupe_keep_order(items: list[str]) -> list[str]:
-    seen = set()
-    result = []
-    for item in items:
-        item = str(item or "").strip()
-        if not item:
-            continue
-        key = item.lower()
-        if key not in seen:
-            seen.add(key)
-            result.append(item)
-    return result
-
-
-def extract_datasets_from_evidence(text: str) -> list[str]:
-    """Rule-based fallback for datasets, benchmarks, workloads and traces."""
-    if not text:
-        return []
-
-    found: list[str] = []
-    lower = text.lower()
-    for name in COMMON_BENCHMARKS:
-        if name.lower() in lower:
-            found.append(name)
-
-    context_patterns = [
-        r"(?:dataset|datasets|benchmark|benchmarks|workload|workloads|trace|traces|evaluation on|evaluated on|experiments on)\s+(?:including|include|such as|:)?\s*([A-Z][A-Za-z0-9_\-+/]*(?:\s*,\s*[A-Z][A-Za-z0-9_\-+/]*){0,8})",
-        r"(?:数据集|基准|评测集|工作负载|负载|轨迹|trace|benchmark)[：: ]+([A-Za-z0-9_\-+/]+(?:[、,，]\s*[A-Za-z0-9_\-+/]+){0,8})",
-    ]
-    for pattern in context_patterns:
-        for match in re.findall(pattern, text, flags=re.IGNORECASE):
-            parts = re.split(r"[,，、;/]|\band\b", match)
-            for part in parts:
-                part = part.strip(" .()[]{}")
-                if len(part) >= 2 and re.search(r"[A-Za-z0-9]", part):
-                    found.append(part)
-
-    return _dedupe_keep_order(found)[:12]
-
-
 def _build_paper_context(paper: Paper, index: int) -> str:
     """Build a structured text block for a single paper."""
     authors_str = ", ".join(a.name for a in paper.authors[:5])
     if len(paper.authors) > 5:
         authors_str += " 等"
 
-    code_info = "未找到公开代码"
+    code_info = ""
     if paper.has_code and paper.code_urls:
-        code_info = f"已找到公开代码: {', '.join(paper.code_urls[:3])}"
-
-    datasets = "、".join(paper.datasets_used) if paper.datasets_used else "原文摘要未明确说明"
-    key_innovation = paper.key_innovation or "原文摘要未明确说明"
-    key_results = paper.key_results or "原文摘要未明确说明"
-    method_category = paper.method_category or "未分类"
+        code_info = f"\n  代码: {', '.join(paper.code_urls[:3])}"
 
     return (
         f"论文 [{index}]:\n"
@@ -88,17 +29,13 @@ def _build_paper_context(paper: Paper, index: int) -> str:
         f"  ArXiv ID: {paper.arxiv_id}\n"
         f"  引用数: {paper.citation_count}\n"
         f"  摘要: {paper.abstract[:500]}{'...' if len(paper.abstract) > 500 else ''}\n"
-        f"  方法类别: {method_category}\n"
-        f"  结构化核心创新: {key_innovation}\n"
-        f"  结构化数据集/Benchmark/Workload: {datasets}\n"
-        f"  结构化关键结果: {key_results}\n"
-        f"  代码状态: {code_info}"
+        f"{code_info}"
     )
 
 
 def _build_system_prompt() -> str:
     """Build the system prompt that defines the review generation task."""
-    return """你是一个严谨的中文科研文献综述写作专家。你的输出将直接作为课程作业中的综述正文。
+    return """你是一个文献综述生成器。你的输出将直接作为学术论文发表。
 严格遵循以下规则：
 
 【核心规则】
@@ -107,48 +44,31 @@ def _build_system_prompt() -> str:
    - "好的，我将..." / "作为一名研究者，我将..." / "好的，以下..."
    - "根据您提供的..." / "基于以上论文..."
    - 任何总结性、回顾性、过渡性的非正文文字
-3. 你的第一个输出字符必须是 "## 一、研究背景与问题定义"
-4. 仅使用提供的论文标题、摘要、年份、引用数、代码状态和已抽取字段，不编造数据集、指标、数值结果、实验结论或开源代码。
-5. 如果摘要或结构化字段没有明确给出数据集、定量结果、消融实验、代码细节，必须写成"原文摘要未明确说明"，不能猜测。
-6. 每个关键技术判断、论文归纳或代表性工作说明都要在句末标注 [1]、[2] 等引用。
-7. 不要输出参考文献列表，参考文献由系统自动追加。
-8. 代码信息必须严格依据每篇论文的"代码状态"字段：如果代码状态是"未找到公开代码"，正文和表格中都必须写"未找到公开代码"，禁止写 GitHub、Hugging Face、开源或随论文发布。
+3. 你的第一个输出字符必须是 "## 一、引言"
+4. 仅使用提供的论文信息，不编造任何细节。
+5. 文中引用使用 [1]、[2] 等格式。
 
 【输出格式】
-## 一、研究背景与问题定义
-[2-3段说明研究领域、核心问题、综述边界和用户关注重点]
+## 一、引言
+[直接开始正文，2-3段概述领域背景、核心挑战、本文关注的焦点]
 
-## 二、技术发展脉络
-[按年份和技术路线说明代表性方法如何演进，避免时间顺序错误]
+## 二、方法分类
+[将论文按方法归类，每类用一个自然段描述]
 
-## 三、方法体系分类
-[按算法思想或系统目标进行分类，每一类解释核心机制、适用场景和局限]
+## 三、论文详细分析
+[逐篇分析：核心创新、数据集、关键结果]
 
-## 四、代表性工作详解
-[选择代表性论文逐篇分析：主要创新、使用数据集、关键结果、是否开源代码]
+## 四、对比分析
+[横向比较各方法的优劣和适用场景]
 
-## 五、数据集与评价指标总结
-[总结文献中明确出现的数据集、指标和实验设置；缺失处说明未明确]
-
-## 六、横向对比分析
-[比较各类方法在性能、效率、可复现性、代码可用性、适用场景上的差异]
-
-## 七、算法演进与趋势
-[结合年份和方法类别，归纳算法从早期方法到近期方法的演进路径]
-
-## 八、开放问题与未来方向
-[提出仍未解决的问题、可能改进方向和后续研究机会]
-
-## 九、结论
-[用1-2段总结综述发现，不新增未引用事实]"""
+## 五、未来展望
+[指出研究空白和发展方向]"""
 
 
 def _build_user_prompt(
     papers: list[Paper],
     topic: str,
     include_tables: bool = True,
-    raw_request: str = "",
-    focus_keywords: Optional[list[str]] = None,
 ) -> str:
     """Build the user prompt with all paper data."""
     paper_blocks = []
@@ -157,20 +77,15 @@ def _build_user_prompt(
 
     papers_text = "\n\n".join(paper_blocks)
 
-    focus_text = "、".join(focus_keywords or [])
-
     table_instruction = ""
     if include_tables:
         table_instruction = """
-请在第四章或第六章中包含一个代表性工作对比表，列如下：
-| 序号 | 论文 | 年份 | 方法类别 | 主要创新 | 数据集/Benchmark/Workload | 关键结果 | 代码 |
-|------|------|------|----------|----------|--------|----------|------|
-表格内容必须优先使用每篇论文的结构化核心创新、结构化数据集/Benchmark/Workload、结构化关键结果和代码状态字段。
+在第三章中包含一个总结表格，列如下：
+| 序号 | 论文 | 年份 | 主要创新 | 数据集 | 关键结果 | 代码 |
+|------|------|------|----------|--------|----------|------|
 """
 
     return f"""主题：{topic}
-用户原始需求：{raw_request or topic}
-重点关注：{focus_text or "未额外指定"}
 论文数量：{len(papers)} 篇
 
 {papers_text}
@@ -178,11 +93,8 @@ def _build_user_prompt(
 {table_instruction}
 
 【严格执行】
-- 直接从 "## 一、研究背景与问题定义" 开始输出，在此之前不要输出任何文字。
+- 直接从 "## 一、引言" 开始输出，在此之前不要输出任何文字。
 - 在正文中对应位置标注引用编号 [1]-[{len(papers)}]。
-- 不确定的信息必须写明"原文摘要未明确说明"，禁止用常识补全。
-- 代码列必须与"代码状态"字段完全一致；没有代码 URL 时不要写开源。
-- 用户原始需求中的重点关注内容应优先体现在分类、对比和未来方向中。
 - 不要输出参考文献列表。"""
 
 
@@ -192,8 +104,6 @@ def generate_review(
     api_key: str,
     model: str = "deepseek-chat",
     base_url: str = "https://api.deepseek.com",
-    raw_request: str = "",
-    focus_keywords: Optional[list[str]] = None,
 ) -> str:
     """
     Generate a structured literature review in Chinese using DeepSeek API.
@@ -216,12 +126,7 @@ def generate_review(
     client = OpenAI(api_key=api_key, base_url=base_url)
 
     system_prompt = _build_system_prompt()
-    user_prompt = _build_user_prompt(
-        papers,
-        topic,
-        raw_request=raw_request,
-        focus_keywords=focus_keywords,
-    )
+    user_prompt = _build_user_prompt(papers, topic)
 
     try:
         response = client.chat.completions.create(
@@ -242,93 +147,14 @@ def generate_review(
         raise
 
 
-def _build_revision_paper_context(paper: dict, index: int) -> str:
-    """Build a compact paper context from frontend/job result paper dicts."""
-    code_status = "未找到公开代码"
-    if paper.get("has_code") and paper.get("code_urls"):
-        code_status = f"已找到公开代码: {', '.join(paper.get('code_urls', [])[:1])}"
-    datasets = paper.get("datasets_used") or []
-    if isinstance(datasets, list):
-        datasets = "、".join(datasets) if datasets else "原文摘要未明确说明"
-
-    return (
-        f"论文 [{index}]:\n"
-        f"  标题: {paper.get('title', '')}\n"
-        f"  年份: {paper.get('year', '')}\n"
-        f"  发表期刊/会议: {paper.get('venue', '') or '未获取'}\n"
-        f"  引用数: {paper.get('citations', 0)}\n"
-        f"  方法类别: {paper.get('method_category', '未分类')}\n"
-        f"  结构化核心创新: {paper.get('key_innovation', '') or '原文摘要未明确说明'}\n"
-        f"  结构化数据集/Benchmark/Workload: {datasets}\n"
-        f"  结构化关键结果: {paper.get('key_results', '') or '原文摘要未明确说明'}\n"
-        f"  代码状态: {code_status}"
-    )
-
-
-def revise_review(
-    current_review: str,
-    papers: list[dict],
-    user_instruction: str,
-    api_key: str,
-    model: str = "deepseek-chat",
-    base_url: str = "https://api.deepseek.com",
-) -> str:
-    """
-    Revise an existing review according to a user's natural-language feedback.
-
-    Returns only the revised review body, without the reference list.
-    """
-    if not current_review.strip():
-        return current_review
-    if not user_instruction.strip():
-        return current_review
-
-    paper_context = "\n\n".join(
-        _build_revision_paper_context(paper, i)
-        for i, paper in enumerate(papers, start=1)
-    )
-
-    system_prompt = """你是严谨的中文科研文献综述编辑。请根据用户反馈修改已有综述正文。
-规则：
-1. 只输出修订后的综述正文，不要解释修改过程。
-2. 不要输出参考文献列表，系统会自动追加。
-3. 必须保留正文中的 [1]、[2] 等引用格式，并且引用编号只能对应提供的论文。
-4. 不能编造论文没有提供的数据集、结果、代码或实验结论。
-5. 如果用户要求侧重模型差异、算法演进、应用场景、实验对比等，应调整章节结构和叙述重点。
-6. 段落应保持学术综述风格，避免口语化。"""
-
-    user_prompt = f"""用户修改意见：
-{user_instruction}
-
-当前综述正文：
-{current_review}
-
-可用论文信息：
-{paper_context}
-
-请基于以上内容输出完整修订版综述正文。不要输出参考文献。"""
-
-    client = OpenAI(api_key=api_key, base_url=base_url)
-    response = client.chat.completions.create(
-        model=model,
-        max_tokens=8192,
-        messages=[
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt},
-        ],
-    )
-    return response.choices[0].message.content or current_review
-
-
 def extract_paper_details(
     papers: list[Paper],
     api_key: str,
     model: str = "deepseek-chat",
     base_url: str = "https://api.deepseek.com",
-    rag_data: Optional[dict[str, dict]] = None,
 ) -> list[Paper]:
     """
-    Use DeepSeek to extract structured details from abstracts and optional RAG evidence:
+    Use DeepSeek to extract structured details from each paper's abstract:
     - key_innovation
     - datasets_used
     - key_results
@@ -347,43 +173,21 @@ def extract_paper_details(
 
     client = OpenAI(api_key=api_key, base_url=base_url)
 
-    rag_data = rag_data or {}
-
     paper_list = []
     for i, p in enumerate(papers, start=1):
-        rag_context = (rag_data.get(p.arxiv_id, {}) or {}).get("context", "")
-        evidence = ""
-        if rag_context:
-            evidence = (
-                "\n"
-                f"    全文证据片段: {rag_context[:1800]}"
-            )
-        evidence_text = f"{p.title}\n{p.abstract}\n{rag_context}"
-        p._dataset_candidates = extract_datasets_from_evidence(evidence_text)  # temporary runtime hint
-        dataset_hint = "、".join(p._dataset_candidates) if p._dataset_candidates else "未通过规则识别到"
-
         paper_list.append(
             f"[{i}] 标题: {p.title}\n"
             f"    年份: {p.year}\n"
-            f"    摘要: {p.abstract[:600]}"
-            f"\n    规则识别到的候选数据集/Benchmark/Workload: {dataset_hint}"
-            f"{evidence}"
+            f"    摘要: {p.abstract[:400]}"
         )
 
     papers_text = "\n\n".join(paper_list)
 
-    evidence_label = "摘要和全文证据片段" if rag_data else "标题和摘要"
-
-    prompt = f"""请基于每篇论文的{evidence_label}提取以下结构化信息。
-要求非常严格：只能提取证据中明确出现的信息，不要用常识补全。
-所有输出字段必须使用中文表达；论文名、方法名、数据集名、Benchmark 名、指标名、英文缩写和数值可以保留原文。
-
+    prompt = f"""请为以下每篇论文提取以下信息：
 - key_innovation: 主要算法或方法创新点（一句话，中文）
-- datasets_used: 证据中明确提到的数据集、Benchmark、Workload、Trace、评测任务或硬件/系统负载名称列表；例如 MMLU、LongBench、ShareGPT traces、MLPerf、SPEC、A100/H100 workloads。没有明确名称则返回 []
-- key_results: 证据中明确提到的关键定量结果、效率提升、性能指标或主要发现，必须用中文句子概括；数值、倍率、百分比、指标名可以保留原文。没有明确结果则写 "证据未明确说明"
-- method_category: 方法类别标签，如 "Transformer类"、"图神经网络类"、"强化学习类"、"扩散模型类"、"注意力机制类"、"系统优化类" 等
-- evidence_source: 信息主要来自 "摘要"、"全文片段" 或 "摘要+全文片段"
-- confidence: 0 到 1 的置信度，全文片段中有明确数据集/结果时置信度应更高
+- datasets_used: 摘要中提到的数据集名称列表
+- key_results: 关键定量结果或发现（一句话，中文）
+- method_category: 方法类别标签，如 "Transformer类"、"图神经网络类"、"强化学习类"、"扩散模型类"、"注意力机制类" 等
 
 仅返回 JSON 数组，不要包含其他内容：
 [
@@ -391,10 +195,8 @@ def extract_paper_details(
     "index": 1,
     "key_innovation": "...",
     "datasets_used": ["数据集1", "数据集2"],
-    "key_results": "该方法在某指标上取得约 3.00 倍加速，同时降低内存开销。",
-    "method_category": "...",
-    "evidence_source": "...",
-    "confidence": 0.8
+    "key_results": "...",
+    "method_category": "..."
   }},
   ...
 ]
@@ -421,18 +223,9 @@ def extract_paper_details(
                 idx = detail.get("index", 0) - 1
                 if 0 <= idx < len(papers):
                     papers[idx].key_innovation = detail.get("key_innovation")
-                    model_datasets = detail.get("datasets_used", [])
-                    if not isinstance(model_datasets, list):
-                        model_datasets = [str(model_datasets)] if model_datasets else []
-                    rule_datasets = getattr(papers[idx], "_dataset_candidates", [])
-                    papers[idx].datasets_used = _dedupe_keep_order(model_datasets + rule_datasets)
+                    papers[idx].datasets_used = detail.get("datasets_used", [])
                     papers[idx].key_results = detail.get("key_results")
                     papers[idx].method_category = detail.get("method_category")
-                    papers[idx].evidence_source = detail.get("evidence_source")
-                    try:
-                        papers[idx].detail_confidence = float(detail.get("confidence") or 0.0)
-                    except (TypeError, ValueError):
-                        papers[idx].detail_confidence = 0.0
 
             logger.info(f"成功提取 {len(details_list)} 篇论文的详情")
         else:
@@ -441,8 +234,53 @@ def extract_paper_details(
     except Exception as e:
         logger.error(f"提取论文详情时出错: {e}")
 
-    for paper in papers:
-        if hasattr(paper, "_dataset_candidates"):
-            delattr(paper, "_dataset_candidates")
-
     return papers
+
+
+def generate_lineage_narrative(graph, llm_call) -> str:
+    """Write a grounded '算法演进脉络' body from REAL edges. Returns '' if no edges.
+
+    llm_call(prompt)->str. Caller injects the LLM (DeepSeek) call.
+    """
+    if not getattr(graph, "edges", None):
+        return ""
+    node_by_key = {n.key: n for n in graph.nodes}
+    edge_lines = []
+    for e in graph.edges:
+        a, b = node_by_key.get(e.src), node_by_key.get(e.dst)
+        if not a or not b:
+            continue
+        ai = f"[{a.paper_index}]" if a.paper_index else ""
+        bi = f"[{b.paper_index}]" if b.paper_index else ""
+        edge_lines.append(f"{a.label}{ai} --{e.relation}({e.label})--> {b.label}{bi}")
+    prompt = (
+        "以下是基于真实引用关系得到的算法演进边（早→晚）。请写 1-2 段中文，"
+        "概述该领域的主要演进脉络。**只能描述下列边中存在的关系，不得新增未列出的演进关系**。"
+        "如论文有编号 [n] 请沿用。直接输出正文，不要标题、不要寒暄：\n\n"
+        + "\n".join(edge_lines)
+    )
+    try:
+        text = (llm_call(prompt) or "").strip()
+        return text
+    except Exception as e:
+        logger.warning(f"脉络生成失败: {e}")
+        return ""
+
+
+def insert_lineage_section(review_text: str, narrative_body: str) -> str:
+    """Insert '## 五、算法演进脉络' before '五、未来展望' (renumbered to 六).
+
+    Falls back to appending the section if the marker is absent.
+    No-op when narrative_body is empty.
+    """
+    if not narrative_body:
+        return review_text
+    section = f"## 五、算法演进脉络\n{narrative_body}\n\n"
+    marker = "## 五、未来展望"
+    if marker in review_text:
+        return review_text.replace(marker, section + "## 六、未来展望", 1)
+    # Fallback: append before references if present, else at end.
+    ref_marker = "## 参考文献"
+    if ref_marker in review_text:
+        return review_text.replace(ref_marker, section + ref_marker, 1)
+    return review_text.rstrip() + "\n\n" + section

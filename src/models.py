@@ -55,8 +55,12 @@ class Paper:
     key_innovation: Optional[str] = None
     datasets_used: list[str] = field(default_factory=list)
     key_results: Optional[str] = None
-    evidence_source: Optional[str] = None
-    detail_confidence: float = 0.0
+
+    # OpenAlex enrichment (populated by openalex_client)
+    openalex_id: Optional[str] = None
+    referenced_works: list[str] = field(default_factory=list)
+    oa_cited_by_count: int = 0
+    oa_year: int = 0
 
     def __post_init__(self):
         if not self.arxiv_url and self.arxiv_id:

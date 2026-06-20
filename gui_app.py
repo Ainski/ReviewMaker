@@ -18,13 +18,16 @@ PROJECT_ROOT = Path(__file__).parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
 from config import config
-from src.paper_fetcher import fetch_papers_for_queries
+from src.paper_fetcher import fetch_papers
 from src.code_finder import find_code_for_papers
-from src.paper_ranker import rank_papers, filter_papers, rerank_papers_with_llm
-from src.review_generator import generate_review, extract_paper_details, revise_review
-from src.query_planner import plan_review_query
+from src.paper_ranker import rank_papers, filter_papers
+from src.review_generator import generate_review, extract_paper_details
 from src.citation_manager import generate_bibtex_file, append_references_to_review, validate_citations
 from src.evolution_diagram import generate_evolution_diagram, generate_category_distribution_chart
+import json as _json
+from src.lineage_graph import build_lineage, _default_llm_call
+from src.lineage_render import render_lineage
+from src.review_generator import generate_lineage_narrative, insert_lineage_section
 from src.svg_poster_generator import generate_svg_poster
 
 logger = logging.getLogger(__name__)
@@ -46,133 +49,33 @@ def _update_job(job_id: str, **kwargs):
             _jobs[job_id].update(kwargs)
 
 
-def _strip_reference_section(review_text: str) -> str:
-    """Remove the auto-appended reference section before revision."""
-    marker = "\n## 参考文献"
-    if marker in review_text:
-        return review_text.split(marker, 1)[0].rstrip()
-    if review_text.startswith("## 参考文献"):
-        return ""
-    return review_text.rstrip()
-
-
-def _paper_dict_to_reference_like_paper(p: dict):
-    """Create a minimal object compatible with citation_manager helpers."""
-    from src.models import Paper, Author
-    arxiv_url = p.get("arxiv_url")
-    arxiv_id = ""
-    if arxiv_url and "/abs/" in arxiv_url:
-        arxiv_id = arxiv_url.rsplit("/abs/", 1)[-1]
-    title = p.get("title", "")
-    return Paper(
-        arxiv_id=arxiv_id or f"paper_{p.get('index', '')}",
-        title=title,
-        abstract="",
-        authors=[Author(name=p.get("first_author") or "Unknown")],
-        year=int(p.get("year") or 0),
-        journal=p.get("venue") or None,
-        arxiv_url=arxiv_url,
-        pdf_url=p.get("pdf_url"),
-        has_code=bool(p.get("has_code")),
-        code_urls=p.get("code_urls") or [],
-    )
-
-
 def _run_pipeline_thread(job_id: str, topic: str, max_papers: int, year_range: int,
                           no_code_search: bool, no_poster: bool,
-                          use_rag: bool = False, use_agent: bool = False,
-                          raw_request: str = ""):
+                          use_rag: bool = False, use_agent: bool = False):
     """Run the full pipeline in a background thread, updating job progress."""
     try:
         job_dir = OUTPUT_BASE / job_id
         job_dir.mkdir(parents=True, exist_ok=True)
-        warnings = []
-
-        # Step 0: Plan request
-        _update_job(job_id, status="running", step="正在解析综述需求...", progress=3)
-        query_plan = plan_review_query(
-            raw_request or topic,
-            api_key=config.deepseek_api_key,
-            model=config.deepseek_model,
-            base_url=config.deepseek_base_url,
-        )
-        warnings.extend(query_plan.warnings)
-        topic = query_plan.chinese_topic or query_plan.topic or topic
-        search_topic = query_plan.topic or topic
-        _update_job(
-            job_id,
-            progress=5,
-            step=f"已提取主题: {topic}",
-            query_plan={
-                "topic": query_plan.topic,
-                "chinese_topic": query_plan.chinese_topic,
-                "search_queries": query_plan.normalized_queries(),
-                "focus_keywords": query_plan.focus_keywords,
-                "source": query_plan.source,
-            },
-        )
 
         # Step 1: Fetch
-        _update_job(job_id, status="running", step="正在多 query 检索论文...", progress=8)
-        papers, fetch_warnings, query_stats = fetch_papers_for_queries(
-            plan=query_plan,
-            max_results=max_papers,
-            year_range=year_range,
-            api_key=config.semantic_scholar_api_key,
-        )
-        warnings.extend(fetch_warnings)
+        _update_job(job_id, status="running", step="正在从 arXiv 抓取论文...", progress=5)
+        papers = fetch_papers(topic=topic, max_results=max_papers, year_range=year_range)
         if not papers:
             _update_job(job_id, status="error", message="未找到相关论文，请尝试扩大搜索范围。")
             return
         _update_job(job_id, progress=15, step=f"已获取 {len(papers)} 篇论文")
 
-        # Code search is intentionally delayed until after ranking/filtering.
-        # Searching every raw candidate is slow and wastes API quota.
+        # Step 2: Code search
+        if not no_code_search:
+            _update_job(job_id, step="正在 GitHub 搜索代码...", progress=20)
+            papers = find_code_for_papers(papers, github_token=config.github_token)
         _update_job(job_id, progress=30)
 
         # Step 3: Rank
         _update_job(job_id, step="正在排序论文...", progress=35)
-        ranked_candidates = rank_papers(
-            papers,
-            search_topic,
-            year_range=year_range,
-            focus_keywords=query_plan.focus_keywords,
-            search_queries=query_plan.normalized_queries(),
-        )
-        _update_job(job_id, step="正在进行语义相关性重排...", progress=40)
-        ranked_candidates = rerank_papers_with_llm(
-            ranked_candidates,
-            search_topic,
-            api_key=config.deepseek_api_key,
-            raw_request=raw_request,
-            focus_keywords=query_plan.focus_keywords,
-            model=config.deepseek_model,
-            base_url=config.deepseek_base_url,
-            candidate_limit=max(max_papers * 3, 30),
-        )
-        papers = filter_papers(ranked_candidates, max_papers=max_papers)
-        if len(papers) < max_papers:
-            warnings.append(
-                f"用户请求 {max_papers} 篇论文，系统筛选出 {len(papers)} 篇高相关论文，已继续生成。"
-            )
-        if not papers:
-            papers = ranked_candidates[:min(max_papers, len(ranked_candidates))]
-            warnings.append("严格相关性过滤后没有论文达到阈值，已使用排序最高的候选论文继续生成。")
+        papers = rank_papers(papers, topic, year_range=year_range)
+        papers = filter_papers(papers, max_papers=max_papers)
         _update_job(job_id, progress=45, step=f"已筛选 {len(papers)} 篇论文")
-
-        # Step 3a: Code search on selected papers only
-        if not no_code_search:
-            _update_job(job_id, step=f"正在为 {len(papers)} 篇入选论文搜索代码...", progress=46)
-            papers = find_code_for_papers(
-                papers,
-                github_token=config.github_token,
-                deepseek_api_key=config.deepseek_api_key,
-                deepseek_model=config.deepseek_model,
-                deepseek_base_url=config.deepseek_base_url,
-                scan_pdf=True,
-                verify_with_llm=True,
-                max_workers=3,
-            )
 
         # Step 3b (optional): RAG enrichment
         rag_data = {}
@@ -180,11 +83,7 @@ def _run_pipeline_thread(job_id: str, topic: str, max_papers: int, year_range: i
             _update_job(job_id, step="RAG 增强: 正在下载PDF全文并提取相关内容...", progress=48)
             from src.rag_engine import batch_rag_enrich
             try:
-                evidence_query = (
-                    f"{search_topic} dataset benchmark experiments evaluation results "
-                    "accuracy latency throughput memory table code github repository"
-                )
-                rag_data = batch_rag_enrich(papers, evidence_query, max_chunks_per_paper=8)
+                rag_data = batch_rag_enrich(papers, topic, max_chunks_per_paper=5)
                 num_rag = sum(1 for v in rag_data.values() if v["context"])
                 _update_job(job_id, progress=55, step=f"RAG: {num_rag}/{len(papers)} 篇论文全文提取完成")
             except Exception as e:
@@ -194,8 +93,7 @@ def _run_pipeline_thread(job_id: str, topic: str, max_papers: int, year_range: i
         _update_job(job_id, step="DeepSeek AI 正在提取论文详情...", progress=60)
         papers = extract_paper_details(papers, api_key=config.deepseek_api_key,
                                         model=config.deepseek_model,
-                                        base_url=config.deepseek_base_url,
-                                        rag_data=rag_data)
+                                        base_url=config.deepseek_base_url)
         _update_job(job_id, progress=65)
 
         # Step 4b: Generate review (with RAG if enabled)
@@ -226,16 +124,33 @@ def _run_pipeline_thread(job_id: str, topic: str, max_papers: int, year_range: i
             except Exception:
                 review_text = generate_review(papers, topic, api_key=config.deepseek_api_key,
                                               model=config.deepseek_model,
-                                              base_url=config.deepseek_base_url,
-                                              raw_request=raw_request,
-                                              focus_keywords=query_plan.focus_keywords)
+                                              base_url=config.deepseek_base_url)
         else:
             review_text = generate_review(papers, topic, api_key=config.deepseek_api_key,
                                            model=config.deepseek_model,
-                                           base_url=config.deepseek_base_url,
-                                           raw_request=raw_request,
-                                           focus_keywords=query_plan.focus_keywords)
+                                           base_url=config.deepseek_base_url)
         validation = validate_citations(review_text, len(papers))
+
+        # Build citation-grounded lineage graph + grounded narrative
+        lineage_obj = None
+        poster_caption = None
+        try:
+            lineage_obj = build_lineage(
+                papers, topic,
+                api_key=config.deepseek_api_key, model=config.deepseek_model,
+                base_url=config.deepseek_base_url,
+            )
+            narrative = generate_lineage_narrative(
+                lineage_obj,
+                _default_llm_call(config.deepseek_api_key, config.deepseek_model, config.deepseek_base_url),
+            )
+            review_text = insert_lineage_section(review_text, narrative)
+            if narrative and narrative.strip():
+                poster_caption = narrative.strip().split("。")[0].strip() + "。"
+            _update_job(job_id, step="算法演进谱系图已生成")
+        except Exception as e:
+            _update_job(job_id, step=f"谱系图回退散点图: {e}")
+
         final_review = append_references_to_review(review_text, papers)
 
         review_path = job_dir / "review.md"
@@ -248,7 +163,12 @@ def _run_pipeline_thread(job_id: str, topic: str, max_papers: int, year_range: i
         # Step 5: Diagrams
         _update_job(job_id, step="正在生成演进图...", progress=80)
         evo_path = job_dir / "evolution.png"
-        generate_evolution_diagram(papers, topic, output_path=str(evo_path))
+        if lineage_obj is not None and lineage_obj.edges:
+            render_lineage(lineage_obj, topic, output_path=str(evo_path))
+            with open(job_dir / "lineage_metrics.json", "w", encoding="utf-8") as f:
+                _json.dump(lineage_obj.metrics, f, ensure_ascii=False, indent=2)
+        else:
+            generate_evolution_diagram(papers, topic, output_path=str(evo_path))
 
         dist_path = job_dir / "distribution.png"
         generate_category_distribution_chart(papers, output_path=str(dist_path))
@@ -259,8 +179,8 @@ def _run_pipeline_thread(job_id: str, topic: str, max_papers: int, year_range: i
         if not no_poster:
             _update_job(job_id, step="正在生成海报...", progress=92)
             poster_path = job_dir / "poster.svg"
-            generate_svg_poster(papers, topic, review_text, str(evo_path),
-                                str(poster_path), generate_png=True)
+            generate_svg_poster(papers, topic, review_text, str(evo_path), str(poster_path),
+                                lineage_caption=poster_caption)
 
         # Build paper list data for frontend
         paper_list = []
@@ -270,18 +190,13 @@ def _run_pipeline_thread(job_id: str, topic: str, max_papers: int, year_range: i
                 "title": p.title,
                 "first_author": p.first_author,
                 "year": p.year,
-                "venue": p.journal or "",
                 "citations": p.citation_count,
-                "arxiv_url": p.arxiv_url,
-                "pdf_url": p.pdf_url,
                 "has_code": p.has_code,
                 "code_urls": p.code_urls,
                 "method_category": p.method_category or "未分类",
                 "key_innovation": p.key_innovation or "",
                 "datasets_used": p.datasets_used,
                 "key_results": p.key_results or "",
-                "evidence_source": p.evidence_source or "",
-                "detail_confidence": p.detail_confidence,
             })
 
         _update_job(job_id,
@@ -291,16 +206,6 @@ def _run_pipeline_thread(job_id: str, topic: str, max_papers: int, year_range: i
             result={
                 "review_text": final_review,
                 "paper_count": len(papers),
-                "requested_count": max_papers,
-                "warnings": warnings,
-                "query_plan": {
-                    "topic": query_plan.topic,
-                    "chinese_topic": query_plan.chinese_topic,
-                    "search_queries": query_plan.normalized_queries(),
-                    "focus_keywords": query_plan.focus_keywords,
-                    "source": query_plan.source,
-                    "query_stats": query_stats,
-                },
                 "papers": paper_list,
                 "validation": {
                     "valid": len(validation["valid_citations"]),
@@ -313,7 +218,6 @@ def _run_pipeline_thread(job_id: str, topic: str, max_papers: int, year_range: i
                     "evolution": f"/output/{job_id}/evolution.png",
                     "distribution": f"/output/{job_id}/distribution.png",
                     "poster": f"/output/{job_id}/poster.svg" if poster_path else None,
-                    "poster_png": f"/output/{job_id}/poster.png" if poster_path else None,
                 }
             },
         )
@@ -336,9 +240,6 @@ def api_start():
     """Start a new review job."""
     data = request.get_json()
     topic = data.get("topic", "").strip()
-    raw_request = data.get("raw_request", "").strip()
-    if not topic and raw_request:
-        topic = raw_request
     if not topic:
         return jsonify({"error": "请输入研究主题"}), 400
 
@@ -364,7 +265,7 @@ def api_start():
 
     thread = threading.Thread(
         target=_run_pipeline_thread,
-        args=(job_id, topic, max_papers, year_range, no_code_search, no_poster, use_rag, use_agent, raw_request),
+        args=(job_id, topic, max_papers, year_range, no_code_search, no_poster, use_rag, use_agent),
         daemon=True,
     )
     thread.start()
@@ -384,66 +285,8 @@ def api_progress(job_id):
         "progress": job["progress"],
         "step": job["step"],
         "message": job.get("message", ""),
-        "query_plan": job.get("query_plan"),
         "result": job.get("result"),
     })
-
-
-@app.route("/api/revise", methods=["POST"])
-def api_revise():
-    """Revise the generated review according to a follow-up chat instruction."""
-    data = request.get_json()
-    job_id = (data.get("job_id") or "").strip()
-    instruction = (data.get("instruction") or "").strip()
-    if not job_id:
-        return jsonify({"error": "缺少 job_id"}), 400
-    if not instruction:
-        return jsonify({"error": "请输入修改意见"}), 400
-
-    with _jobs_lock:
-        job = _jobs.get(job_id)
-    if not job or not job.get("result"):
-        return jsonify({"error": "当前没有可修改的综述结果"}), 404
-
-    result = job["result"]
-    current_review = _strip_reference_section(result.get("review_text", ""))
-    papers = result.get("papers", [])
-    if not current_review or not papers:
-        return jsonify({"error": "当前结果缺少综述正文或论文列表，无法修改"}), 400
-
-    try:
-        revised_body = revise_review(
-            current_review=current_review,
-            papers=papers,
-            user_instruction=instruction,
-            api_key=config.deepseek_api_key,
-            model=config.deepseek_model,
-            base_url=config.deepseek_base_url,
-        )
-
-        ref_papers = [_paper_dict_to_reference_like_paper(p) for p in papers]
-        final_review = append_references_to_review(revised_body, ref_papers)
-        validation = validate_citations(revised_body, len(papers))
-
-        result["review_text"] = final_review
-        result["validation"] = {
-            "valid": len(validation["valid_citations"]),
-            "total": len(papers),
-            "missing": list(validation["missing_citations"]),
-        }
-        result.setdefault("revision_history", []).append({
-            "instruction": instruction,
-            "created_at": datetime.now().isoformat(),
-        })
-
-        review_path = OUTPUT_BASE / job_id / "review.md"
-        review_path.write_text(final_review, encoding="utf-8")
-
-        _update_job(job_id, result=result, step="综述已按反馈修改")
-        return jsonify({"result": result})
-    except Exception as e:
-        logger.exception(f"Review revision failed for job {job_id}")
-        return jsonify({"error": str(e)}), 500
 
 
 @app.route("/output/<path:filepath>")
