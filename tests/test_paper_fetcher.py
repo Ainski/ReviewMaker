@@ -4,7 +4,13 @@ import pytest
 from unittest.mock import MagicMock, patch
 
 from src.models import Paper, Author
-from src.paper_fetcher import search_arxiv, fetch_papers, _arxiv_result_to_paper
+from src.paper_fetcher import (
+    search_arxiv,
+    fetch_papers,
+    _arxiv_result_to_paper,
+    enrich_papers_with_semantic_scholar,
+    normalize_arxiv_id,
+)
 
 
 def test_paper_model():
@@ -53,6 +59,13 @@ def test_paper_code_urls():
     assert len(paper.code_urls) == 1
 
 
+def test_normalize_arxiv_id_strips_versions_and_urls():
+    """Test arXiv ID normalization for Semantic Scholar matching."""
+    assert normalize_arxiv_id("1706.03762v7") == "1706.03762"
+    assert normalize_arxiv_id("https://arxiv.org/abs/2106.09685v2") == "2106.09685"
+    assert normalize_arxiv_id("ARXIV:2401.01234") == "2401.01234"
+
+
 @patch("src.paper_fetcher.arxiv.Client")
 def test_search_arxiv_mocked(mock_client):
     """Test arXiv search with mocked client."""
@@ -73,6 +86,32 @@ def test_search_arxiv_mocked(mock_client):
     papers = search_arxiv("test topic", max_results=5)
 
     assert len(papers) > 0
+    assert papers[0].arxiv_id == "2106.09685"
+
+
+@patch("src.paper_fetcher.requests.post")
+def test_enrich_papers_with_semantic_scholar_updates_citations(mock_post):
+    """Test exact arXiv ID enrichment writes Semantic Scholar citation counts."""
+    paper = Paper(
+        arxiv_id="1706.03762v7",
+        title="Attention Is All You Need",
+        abstract="...",
+        authors=[Author(name="Ashish Vaswani")],
+        year=2017,
+    )
+
+    mock_response = MagicMock()
+    mock_response.json.return_value = [{
+        "externalIds": {"ArXiv": "1706.03762"},
+        "citationCount": 12345,
+        "influentialCitationCount": 678,
+    }]
+    mock_post.return_value = mock_response
+
+    enriched = enrich_papers_with_semantic_scholar([paper])
+
+    assert enriched[0].citation_count == 12345
+    assert enriched[0].influential_citation_count == 678
 
 
 def test_fetch_papers_no_results():

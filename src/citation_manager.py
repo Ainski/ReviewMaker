@@ -70,7 +70,7 @@ def generate_reference_list(papers: list[Paper]) -> str:
         if len(paper.authors) > 3:
             authors += " 等"
 
-        ref_line = f"[{i}] {authors}. **{paper.title}**."
+        ref_line = f"- [{i}] {authors}. **{paper.title}**."
         if paper.journal:
             ref_line += f" *{paper.journal}*."
         ref_line += f" ({paper.year})."
