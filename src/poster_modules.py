@@ -131,29 +131,53 @@ def _parse_llm_response(raw: str) -> Optional[dict]:
 def _build_fallback_modules(papers: list[Paper], topic: str) -> dict:
     """Build a reasonable fallback when LLM generation fails.
 
-    Uses simple heuristics: group papers by method_category, pick top categories,
-    generate basic module structure.
+    Tries method_category first; if all papers share one category,
+    splits by year range to ensure at least 3-4 modules.
     """
     from collections import Counter
 
     cats = Counter(p.method_category or "未分类" for p in papers)
-    top_cats = [c for c, _ in cats.most_common(4)]
-
-    # Assign papers to categories
-    cat_papers = {c: [] for c in top_cats}
-    for p in papers:
-        cat = p.method_category or "未分类"
-        if cat in cat_papers:
-            cat_papers[cat].append(p)
-        else:
-            # Assign to closest category
-            cat_papers[top_cats[0]].append(p)
+    # If too few categories, split by year instead
+    unique_cats = [c for c, _ in cats.most_common()]
+    if len(unique_cats) <= 1 and len(papers) >= 4:
+        # Split papers into 4 groups by year
+        years = sorted([p.year or 2024 for p in papers])
+        q1, q2, q3 = years[len(years)//4], years[len(years)//2], years[3*len(years)//4]
+        groups = {
+            f"早期研究 (≤{q1})": [],
+            f"中期发展 ({q1+1}–{q2})": [],
+            f"近期突破 ({q2+1}–{q3})": [],
+            f"前沿方向 (≥{q3+1})": [],
+        }
+        keys = list(groups.keys())
+        for p in papers:
+            y = p.year or 2024
+            if y <= q1: groups[keys[0]].append(p)
+            elif y <= q2: groups[keys[1]].append(p)
+            elif y <= q3: groups[keys[2]].append(p)
+            else: groups[keys[3]].append(p)
+        # Remove empty groups
+        groups = {k: v for k, v in groups.items() if v}
+        top_cats = list(groups.keys())
+        cat_papers = groups
+    else:
+        top_cats = unique_cats[:4]
+        cat_papers = {c: [] for c in top_cats}
+        for p in papers:
+            cat = p.method_category or "未分类"
+            if cat in cat_papers:
+                cat_papers[cat].append(p)
+            else:
+                cat_papers[top_cats[0]].append(p)
 
     modules = []
     colors = ["#166534", "#2F9E71", "#059669", "#0F766E"]
+    labels = ["范式奠基", "效率优化", "理论扩展", "跨领域泛化"]
     for i, (cat, cat_ps) in enumerate(cat_papers.items()):
         if i >= 4:
             break
+        if not cat_ps:
+            continue
         sorted_ps = sorted(cat_ps, key=lambda p: p.citation_count or 0, reverse=True)
         top2 = sorted_ps[:2]
         papers_list = [
@@ -164,10 +188,10 @@ def _build_fallback_modules(papers: list[Paper], topic: str) -> dict:
             "id": f"m{i + 1}",
             "num": str(i + 1),
             "title": cat,
-            "en": cat,
-            "tag": f"{len(cat_ps)} 篇论文",
+            "en": f"Stage {i + 1}",
+            "tag": labels[i % len(labels)] if i < len(labels) else f"{len(cat_ps)} 篇论文",
             "color": colors[i % len(colors)],
-            "idea": f"该方向包含 {len(cat_ps)} 篇论文，围绕 {topic} 展开研究",
+            "idea": f"该阶段包含 {len(cat_ps)} 篇论文，围绕 {topic[:40]} 展开研究",
             "papers": papers_list,
             "paperIds": [p.arxiv_id for p in sorted_ps],
         })
@@ -181,6 +205,7 @@ def _build_fallback_modules(papers: list[Paper], topic: str) -> dict:
             "label": "方法演进",
         })
 
+    logger.info(f"Fallback produced {len(modules)} modules from {len(papers)} papers")
     return {
         "topic": topic,
         "modules": modules,
@@ -226,6 +251,7 @@ def generate_modules(
             ],
             max_tokens=2048,
             temperature=0.3,
+            timeout=15.0,  # fail fast, fallback is acceptable
         )
         raw = response.choices[0].message.content or ""
 

@@ -2088,6 +2088,9 @@ async function pollProgress() {
 // RENDER RESULTS
 // ============================================================
 function renderResults(result) {
+  // Cache result immediately so refresh button always works
+  _lastKnowledgeResult = result;
+
   // Download bar
   const downloadBar = document.getElementById('download-bar-review');
   if (result.files) {
@@ -2384,18 +2387,20 @@ document.addEventListener('keydown', (e) => {
 var _lastKnowledgeResult = null;  // cached result for refresh
 
 function refreshKnowledgeMap() {
-  if (_lastKnowledgeResult && _lastKnowledgeResult.modules && _lastKnowledgeResult.modules.length) {
-    renderKnowledgeMap(_lastKnowledgeResult);
-    showToast('知识演进图已刷新');
-  } else if (_lastKnowledgeResult) {
-    showToast('知识演进图数据不足，无法刷新');
-  } else {
+  if (!_lastKnowledgeResult) {
     showToast('请先运行一次查询');
+    return;
+  }
+  // Always attempt render — even if modules is empty, poster.js will show empty state
+  renderKnowledgeMap(_lastKnowledgeResult);
+  if (_lastKnowledgeResult.modules && _lastKnowledgeResult.modules.length) {
+    showToast('知识演进图已刷新');
+  } else {
+    showToast('模块数据不足 (论文' + (_lastKnowledgeResult.paper_count||0) + '篇)，已渲染空状态');
   }
 }
 
 function renderKnowledgeMap(result) {
-  _lastKnowledgeResult = result;  // cache for refresh
   if (!result || !result.modules || !result.modules.length) {
     var scroll = document.getElementById('poster-scroll');
     if (scroll) {
