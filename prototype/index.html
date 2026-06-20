@@ -1,0 +1,472 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>算法谱系图 — 海报式演进图 v11</title>
+<script src="https://unpkg.com/cytoscape@3.28.1/dist/cytoscape.min.js"></script>
+<style>
+:root{
+  --primary:#6D5DF6;--primary-light:#F0EEFF;--success:#2F9E71;--success-light:#D1FAE5;
+  --warning:#F59E0B;--warning-light:#FEF3C7;--bg:#F6F5F3;--surface:#FFFFFF;
+  --surface-hover:#F7F6F4;--border:#E7E3DC;--border-light:#F2EFEA;
+  --text:#171717;--text-secondary:#55514A;--text-muted:#96918A;
+  --shadow-sm:0 1px 2px rgba(0,0,0,.05);--shadow:0 1px 3px rgba(0,0,0,.06);
+  --shadow-md:0 4px 6px rgba(0,0,0,.07);--shadow-lg:0 10px 15px rgba(0,0,0,.08);
+  --radius-sm:8px;--radius:10px;--radius-lg:12px;
+  --transition:0.2s cubic-bezier(.4,0,.2,1);
+  --font:-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+body{
+  background:var(--bg);color:var(--text);height:100vh;display:flex;overflow:hidden;font-family:var(--font);
+  -webkit-font-smoothing:antialiased;
+  background-image:radial-gradient(ellipse 80% 60% at 30% 20%,rgba(109,93,246,.04) 0%,transparent 70%),radial-gradient(ellipse 60% 50% at 80% 60%,rgba(47,158,113,.03) 0%,transparent 70%);
+}
+::-webkit-scrollbar{width:6px;height:6px;}
+::-webkit-scrollbar-track{background:transparent;}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px;}
+
+/* Sidebar */
+.sidebar{width:292px;min-width:292px;background:rgba(255,255,255,.72);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);border-right:1px solid var(--border);display:flex;flex-direction:column;z-index:10;box-shadow:var(--shadow-md);}
+.sidebar-header{padding:20px 22px 16px;color:#fff;position:relative;overflow:hidden;background:linear-gradient(135deg,var(--primary) 0%,#6366F1 50%,#3730A3 100%);}
+.sidebar-header::after{content:"";position:absolute;top:-50%;right:-30%;width:180px;height:180px;background:rgba(255,255,255,.06);border-radius:50%;pointer-events:none;}
+.sidebar-header h1{font-size:.96rem;font-weight:700;letter-spacing:-.01em;position:relative;z-index:1;}
+.sidebar-header .subtitle{font-size:.68rem;opacity:.7;margin-top:2px;position:relative;z-index:1;}
+.sidebar-body{flex:1;overflow-y:auto;padding:18px 16px;display:flex;flex-direction:column;gap:12px;}
+.form-section{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;box-shadow:var(--shadow-sm);}
+.form-section-title{font-size:.7rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px;}
+.form-group{margin-bottom:12px;}.form-group:last-child{margin-bottom:0;}
+.form-group label{display:block;font-size:.78rem;font-weight:600;color:var(--text-secondary);margin-bottom:5px;}
+.form-group select{width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:.82rem;color:var(--text);background:var(--bg);transition:all var(--transition);font-family:var(--font);}
+.form-group select:focus{outline:none;border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-light);background:var(--surface);}
+
+/* Main */
+.main{flex:1;display:flex;flex-direction:column;overflow:hidden;padding:18px 18px 0;gap:14px;}
+.toolbar-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:10px 18px;display:flex;align-items:center;gap:10px;box-shadow:var(--shadow);flex-shrink:0;font-size:.8rem;color:var(--text-secondary);}
+.toolbar-card .sep{width:1px;height:20px;background:var(--border-light);margin:0 4px;}
+.toolbar-card strong{color:var(--text);font-weight:600;font-size:.84rem;}
+.toolbar-btn{padding:5px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface);cursor:pointer;font-size:.72rem;font-family:var(--font);color:var(--text-secondary);transition:all var(--transition);white-space:nowrap;}
+.toolbar-btn:hover{background:var(--primary-light);border-color:var(--primary);color:var(--primary);}
+.toolbar-btn.active{background:var(--primary);color:#fff;border-color:var(--primary);}
+.toolbar-hint{font-size:.7rem;color:var(--text-muted);margin-left:auto;}
+
+.view-grid{flex:1;display:flex;gap:14px;min-height:0;}
+.view-panel{display:flex;flex-direction:column;background:rgba(255,255,255,.72);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);border:1px solid var(--border);border-radius:var(--radius-lg);box-shadow:var(--shadow);overflow:hidden;}
+.view-panel-header{padding:12px 18px;border-bottom:1px solid var(--border-light);display:flex;align-items:center;justify-content:space-between;flex-shrink:0;background:var(--surface-hover);}
+.view-panel-header h2{font-size:.82rem;font-weight:600;color:var(--text);display:flex;align-items:center;gap:6px;}
+.panel-tag{font-size:.65rem;font-weight:600;padding:2px 8px;border-radius:14px;}
+.panel-tag.poster{background:var(--primary-light);color:var(--primary);}
+.panel-tag.evidence{background:var(--success-light);color:#207A57;}
+.view-panel-body{flex:1;position:relative;overflow:hidden;min-height:300px;}
+
+.poster-panel{flex:2;min-width:560px;max-width:860px;}
+.network-panel{flex:0.8;min-width:0;max-width:460px;}
+
+/* Poster Styles */
+.poster-scroll{height:100%;overflow-y:auto;overflow-x:hidden;padding:0;}
+.poster-inner{position:relative;min-height:100%;display:flex;align-items:center;justify-content:center;padding:24px;}
+
+/* SVG layer */
+.poster-svg{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:0;}
+
+/* Center title node */
+.center-node{
+  position:absolute;z-index:2;
+  background:linear-gradient(135deg,#166534,#2F9E71);
+  color:#fff;border-radius:50%;
+  width:150px;height:150px;
+  display:flex;align-items:center;justify-content:center;
+  text-align:center;font-size:.78rem;font-weight:700;
+  box-shadow:0 0 30px rgba(22,101,52,.2),0 4px 12px rgba(0,0,0,.1);
+  line-height:1.4;cursor:default;
+  pointer-events:auto;
+  transition:all var(--transition);
+}
+.center-node:hover{box-shadow:0 0 40px rgba(22,101,52,.3);transform:scale(1.03);}
+
+/* Module card */
+.module-card{
+  position:absolute;z-index:2;
+  background:var(--surface);border:1.5px solid var(--border);
+  border-radius:var(--radius-lg);padding:16px 18px;
+  width:240px;box-shadow:var(--shadow);
+  cursor:pointer;transition:all var(--transition);
+  pointer-events:auto;
+  text-align:left;
+}
+.module-card:hover{box-shadow:var(--shadow-md);border-color:var(--primary);transform:translateY(-2px);}
+.module-card.active{box-shadow:0 0 0 3px rgba(245,158,11,.25),var(--shadow-md);border-color:#F59E0B;}
+
+.module-card .mod-num{
+  font-size:.6rem;font-weight:700;color:var(--text-muted);
+  text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px;
+}
+.module-card .mod-title{font-size:.84rem;font-weight:700;color:var(--text);margin-bottom:6px;line-height:1.3;}
+.module-card .mod-tag{
+  display:inline-block;font-size:.6rem;font-weight:700;padding:2px 8px;border-radius:10px;
+  background:var(--success-light);color:#166534;margin-bottom:8px;
+}
+.module-card .mod-idea{font-size:.7rem;color:var(--text-secondary);line-height:1.6;margin-bottom:8px;}
+.module-card .mod-papers{font-size:.64rem;color:var(--text-muted);line-height:1.7;border-top:1px solid var(--border-light);padding-top:6px;}
+.module-card .mod-papers span{color:var(--text-secondary);font-weight:600;}
+.module-card .mod-figure{
+  margin-top:8px;border-radius:6px;overflow:hidden;
+  background:var(--bg-alt);border:1px solid var(--border-light);
+  display:flex;align-items:center;justify-content:center;
+  min-height:60px;max-height:100px;
+  font-size:.6rem;color:var(--text-muted);
+}
+
+/* Arrow labels */
+.arrow-label{
+  position:absolute;z-index:3;pointer-events:none;
+  font-size:.68rem;font-weight:600;color:#166534;
+  background:rgba(255,255,255,.85);padding:2px 8px;
+  border-radius:10px;white-space:nowrap;
+}
+
+/* Tooltip */
+.cy-tooltip{position:absolute;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:10px 14px;font-size:.78rem;max-width:320px;box-shadow:var(--shadow-md);pointer-events:none;z-index:100;line-height:1.5;font-family:var(--font);display:none;}
+.cy-tooltip .tt-title{font-weight:700;color:var(--text);font-size:.82rem;}
+.cy-tooltip .tt-meta{font-size:.7rem;color:var(--text-muted);margin-top:2px;}
+.cy-tooltip .tt-desc{font-size:.72rem;color:var(--text-secondary);margin-top:4px;border-top:1px solid var(--border-light);padding-top:4px;}
+
+/* Detail drawer */
+.detail-drawer{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg) var(--radius-lg) 0 0;box-shadow:var(--shadow-lg);overflow:hidden;max-height:0;transition:max-height var(--transition);}
+.detail-drawer.open{max-height:200px;}
+.detail-drawer-inner{padding:16px 24px;display:flex;gap:24px;}
+.detail-col{flex:1;font-size:.8rem;line-height:1.7;}
+.detail-col:first-child{flex:2;}
+.detail-col-label{font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);margin-bottom:6px;}
+.detail-col .title-line{font-weight:700;font-size:.9rem;color:var(--text);margin-bottom:4px;}
+.detail-col .meta-line{color:var(--text-secondary);font-size:.78rem;}
+.detail-col .desc-line{color:var(--text-secondary);margin-top:6px;font-size:.78rem;}
+
+.toast{position:fixed;top:18px;right:18px;background:var(--text);color:#fff;padding:8px 18px;border-radius:var(--radius);font-size:.78rem;font-family:var(--font);z-index:200;opacity:0;transform:translateX(20px);transition:all var(--transition);pointer-events:none;box-shadow:var(--shadow-md);}
+.toast.show{opacity:1;transform:translateX(0);}
+
+@media(max-width:1100px){.view-grid{flex-direction:column;}.poster-panel,.network-panel{flex:1;max-width:none;min-width:0;}}
+</style>
+</head>
+<body>
+
+<aside class="sidebar">
+  <div class="sidebar-header"><h1>🧬 算法谱系图</h1><div class="subtitle">Poster-Style Knowledge Map</div></div>
+  <div class="sidebar-body">
+    <div class="form-section">
+      <div class="form-section-title">📋 当前主题</div>
+      <div style="font-size:.84rem;font-weight:600;color:var(--text);line-height:1.5">Transformer Attention Mechanisms</div>
+      <div style="font-size:.7rem;color:var(--text-muted);margin-top:6px">4 知识模块 · 8 篇代表论文 · 2014–2024</div>
+    </div>
+    <div class="form-section">
+      <div class="form-section-title">🔍 论文网络筛选</div>
+      <div class="form-group">
+        <label>年份</label>
+        <select id="filter-year" onchange="applyFilters()">
+          <option value="all">全部 (2014–2026)</option><option value="early">奠基期 (2014–2017)</option><option value="mid">发展期 (2019–2021)</option><option value="late">近期 (2022–2026)</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>方法方向</label>
+        <select id="filter-cluster" onchange="applyFilters()">
+          <option value="all">全部</option><option value="attention">基础注意力</option><option value="sparse">稀疏/局部</option><option value="linear">线性/核</option><option value="flash">硬件感知</option><option value="moe">MoE</option><option value="ssm">替代范式</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>网络显示</label>
+        <div style="display:flex;flex-direction:column;gap:5px">
+          <label style="display:flex;align-items:center;gap:6px;font-weight:400;font-size:.76rem;cursor:pointer;color:var(--text-secondary)"><input type="checkbox" id="chk-edges" checked onchange="toggleEdges()"> 引用边</label>
+        </div>
+      </div>
+    </div>
+    <div class="form-section">
+      <div class="form-section-title">📐 图例</div>
+      <div style="font-size:.7rem;color:var(--text-secondary);line-height:1.8">
+        <div>🟢 论文节点 · 绿深 ∝ 引用量</div><div>⭕ 奠基论文 · 深绿粗边框</div><div>— 引用边 (无箭头)</div>
+      </div>
+    </div>
+  </div>
+</aside>
+
+<main class="main">
+  <div class="toolbar-card">
+    <strong>🧬 知识演进图</strong><span style="color:var(--text-muted);font-size:.7rem">Poster Figure 1</span>
+    <span class="sep"></span>
+    <button class="toolbar-btn" onclick="resetState()">清除选择</button>
+    <button class="toolbar-btn" onclick="paperCy.fit(undefined,30)">适应网络</button>
+    <span class="toolbar-hint">点击知识模块 → 高亮支撑论文 · 点击论文 → 高亮模块</span>
+  </div>
+  <div class="view-grid">
+    <!-- LEFT: Poster Knowledge Map -->
+    <div class="view-panel poster-panel">
+      <div class="view-panel-header"><h2>🧬 知识演进图</h2><span class="panel-tag poster">Poster Figure 1 · 4 模块</span></div>
+      <div class="view-panel-body" id="poster-container">
+        <div class="poster-scroll" id="poster-scroll"></div>
+      </div>
+    </div>
+    <!-- RIGHT: Paper Network -->
+    <div class="view-panel network-panel">
+      <div class="view-panel-header"><h2>📄 论文关系网络</h2><span class="panel-tag evidence">证据层 · 15 篇论文</span></div>
+      <div class="view-panel-body" id="network-container"></div>
+    </div>
+  </div>
+  <div class="detail-drawer" id="detail-drawer"><div class="detail-drawer-inner" id="detail-content"></div></div>
+</main>
+<div class="toast" id="toast"></div>
+
+<script>
+// ============================================================================
+// STATE
+// ============================================================================
+const STATE={selectedPaperId:null,selectedModuleId:null,activeFilters:{year:'all',cluster:'all'}};
+function selectModule(mid){if(STATE.selectedModuleId===mid){STATE.selectedModuleId=null;clearAll();return;}STATE.selectedModuleId=mid;STATE.selectedPaperId=null;applySelection();}
+function selectPaper(pid){if(STATE.selectedPaperId===pid){STATE.selectedPaperId=null;clearAll();return;}STATE.selectedPaperId=pid;STATE.selectedModuleId=null;applySelection();}
+function clearAll(){STATE.selectedModuleId=null;STATE.selectedPaperId=null;paperCy.elements().removeClass('dimmed').removeClass('highlighted');document.querySelectorAll('.module-card').forEach(c=>c.classList.remove('active'));closeDetail();}
+function resetState(){clearAll();document.getElementById('filter-year').value='all';document.getElementById('filter-cluster').value='all';applyFilters();}
+function applySelection(){
+  paperCy.elements().removeClass('dimmed').removeClass('highlighted');
+  document.querySelectorAll('.module-card').forEach(c=>c.classList.remove('active'));
+  if(STATE.selectedModuleId){
+    const m=modules.find(m=>m.id===STATE.selectedModuleId);
+    const related=m?m.paperIds:[];paperCy.elements().addClass('dimmed');
+    paperCy.nodes().filter(n=>related.includes(n.id())).removeClass('dimmed').addClass('highlighted');
+    document.getElementById('mcard-'+STATE.selectedModuleId)?.classList.add('active');
+    showModuleDetail(m,related);
+  }else if(STATE.selectedPaperId){
+    const pn=paperNodes.find(p=>p.id===STATE.selectedPaperId);paperCy.getElementById(STATE.selectedPaperId).addClass('highlighted');
+    if(pn&&pn.moduleId){const m=modules.find(m=>m.id===pn.moduleId);if(m){document.getElementById('mcard-'+m.id)?.classList.add('active');const related=m.paperIds;paperCy.nodes().filter(n=>related.includes(n.id())).removeClass('dimmed').addClass('highlighted');showModuleDetail(m,related);}}
+  }
+}
+
+// ============================================================================
+// DATA
+// ============================================================================
+const paperNodes=[
+  {id:'p1',label:'Vaswani et al.\n"Attention Is All You Need"',year:2017,citations:95000,isFound:true,cluster:'attention',moduleId:'m2',abstract:'Proposed Transformer with self-attention, dispensing recurrence.'},
+  {id:'p2',label:'Bahdanau et al.\n"Neural Machine Translation"',year:2014,citations:38000,isFound:true,cluster:'attention',moduleId:'m1',abstract:'Introduced attention for alignment in NMT.'},
+  {id:'p3',label:'Child et al.\n"Sparse Transformer"',year:2019,citations:2800,isFound:false,cluster:'sparse',moduleId:'m3',abstract:'Sparse factorizations reduce O(n²) to O(n√n).'},
+  {id:'p4',label:'Kitaev et al.\n"Reformer"',year:2020,citations:3200,isFound:false,cluster:'sparse',moduleId:'m3',abstract:'LSH-based attention for efficient long sequences.'},
+  {id:'p5',label:'Beltagy et al.\n"Longformer"',year:2020,citations:4500,isFound:false,cluster:'sparse',moduleId:'m3',abstract:'Local windowed + task-global attention for documents.'},
+  {id:'p6',label:'Katharopoulos et al.\n"Linear Transformer"',year:2020,citations:2100,isFound:false,cluster:'linear',moduleId:'m3',abstract:'Kernel feature maps for linear-time attention.'},
+  {id:'p7',label:'Choromanski et al.\n"Performer"',year:2021,citations:1800,isFound:false,cluster:'linear',moduleId:'m3',abstract:'FAVOR+ orthogonal features for softmax approx.'},
+  {id:'p8',label:'Wang et al.\n"Linformer"',year:2020,citations:1600,isFound:false,cluster:'linear',moduleId:'m3',abstract:'Self-attention is low-rank, linear approximation.'},
+  {id:'p9',label:'Dao et al.\n"FlashAttention"',year:2022,citations:3500,isFound:false,cluster:'flash',moduleId:'m3',abstract:'IO-aware tiling + recomputation for wall-clock speedup.'},
+  {id:'p10',label:'Dao\n"FlashAttention-2"',year:2023,citations:1800,isFound:false,cluster:'flash',moduleId:'m3',abstract:'2× speedup via better sequence parallelism.'},
+  {id:'p11',label:'Dosovitskiy et al.\n"Vision Transformer (ViT)"',year:2021,citations:28000,isFound:false,cluster:'vit',moduleId:'m4',abstract:'Pure Transformer applied to image patches for classification.'},
+  {id:'p12',label:'Liu et al.\n"Swin Transformer"',year:2021,citations:15000,isFound:false,cluster:'vit',moduleId:'m4',abstract:'Hierarchical shifted-window Transformer for vision.'},
+  {id:'p13',label:'Devlin et al.\n"BERT: Pre-training"',year:2019,citations:110000,isFound:false,cluster:'attention',moduleId:'m2',abstract:'Bidirectional Transformer pre-training for NLP tasks.'},
+  {id:'p14',label:'Hochreiter & Schmidhuber\n"Long Short-Term Memory"',year:1997,citations:95000,isFound:true,cluster:'lstm',moduleId:'m1',abstract:'LSTM architecture addresses vanishing gradients in RNNs.'},
+  {id:'p15',label:'Bengio et al.\n"Learning Long-Term\nDependencies"',year:1994,citations:12000,isFound:true,cluster:'lstm',moduleId:'m1',abstract:'Identified vanishing gradient problem in recurrent networks.'},
+];
+const paperEdges=[
+  {id:'e1',source:'p15',target:'p14'},{id:'e2',source:'p14',target:'p2'},{id:'e3',source:'p2',target:'p1'},
+  {id:'e4',source:'p1',target:'p13'},{id:'e5',source:'p1',target:'p3'},{id:'e6',source:'p1',target:'p6'},
+  {id:'e7',source:'p3',target:'p5'},{id:'e8',source:'p3',target:'p4'},{id:'e9',source:'p6',target:'p7'},
+  {id:'e10',source:'p3',target:'p9'},{id:'e11',source:'p9',target:'p10'},{id:'e12',source:'p1',target:'p11'},
+  {id:'e13',source:'p11',target:'p12'},{id:'e14',source:'p6',target:'p8'},
+];
+
+// 4 Knowledge Modules
+const modules=[
+  {id:'m1',num:'1',title:'序列建模困境',en:'Problem Background',
+   tag:'长距离依赖 · 并行瓶颈',color:'#166534',
+   idea:'传统 RNN/LSTM 受限于串行计算和梯度消失，难以高效建模长序列全局依赖',
+   papers:['Hochreiter & Schmidhuber 1997: LSTM','Bengio et al. 1994: Vanishing Gradients'],
+   paperIds:['p14','p15']},
+  {id:'m2',num:'2',title:'Transformer 核心突破',en:'Self-Attention & Transformer',
+   tag:'Self-Attention · 全局并行',color:'#2F9E71',
+   idea:'用 Self-Attention 替代循环结构，每个 token 直接关注所有 token，实现并行全局上下文建模',
+   papers:['Vaswani et al. 2017: Attention Is All You Need','Devlin et al. 2019: BERT'],
+   paperIds:['p1','p13']},
+  {id:'m3',num:'3',title:'效率革命',en:'Efficient Attention',
+   tag:'O(n²) → O(n) · IO-Aware',color:'#059669',
+   idea:'稀疏模式、核近似与 IO-aware 融合降低复杂度，FlashAttention 使长上下文训练可行',
+   papers:['Dao et al. 2022: FlashAttention','Choromanski et al. 2021: Performer'],
+   paperIds:['p9','p7','p3','p5','p6','p10','p4','p8']},
+  {id:'m4',num:'4',title:'跨模态泛化',en:'Universal Attention',
+   tag:'Vision · 多模态 · 可解释',color:'#0F766E',
+   idea:'注意力机制从 NLP 扩展到视觉、跨模态融合和可解释性研究，成为通用建模基元',
+   papers:['Dosovitskiy et al. 2021: ViT','Liu et al. 2021: Swin Transformer'],
+   paperIds:['p11','p12']},
+];
+
+// Arrows
+const arrows=[
+  {from:'m1',to:'m2',label:'突破序列依赖'},
+  {from:'m2',to:'m3',label:'O(n²) → O(n)'},
+  {from:'m3',to:'m4',label:'跨模态泛化'},
+];
+
+// ============================================================================
+// Green gradient for papers
+// ============================================================================
+function citColor(c){const lo=200,hi=100000,t=Math.max(0,Math.min(1,(Math.log(c)-Math.log(lo))/(Math.log(hi)-Math.log(lo))));return `hsl(${142+t*20},${76-t*16}%,${45-t*29}%)`;}
+
+// ============================================================================
+// CYTOSCAPE — Paper Network
+// ============================================================================
+const paperCy=cytoscape({container:document.getElementById('network-container'),
+  style:[
+    {selector:'node',style:{'label':'','width':'mapData(citations,200,100000,18,58)','height':'mapData(citations,200,100000,18,58)','border-width':2,'border-color':'#fff','font-size':9,'color':'#55514A','text-wrap':'wrap','text-max-width':80,'text-valign':'bottom','text-halign':'center','text-margin-y':4,'shadow-blur':3,'shadow-color':'rgba(0,0,0,.06)'}},
+    {selector:'node[isFound]',style:{'border-color':'#166534','border-width':3,'width':'mapData(citations,200,100000,24,62)','height':'mapData(citations,200,100000,24,62)'}},
+    {selector:'edge',style:{'width':.7,'line-color':'#C5D5BD','target-arrow-shape':'none','curve-style':'bezier','opacity':.45}},
+    {selector:'node:selected',style:{'border-color':'#F59E0B','border-width':3,'shadow-blur':10,'shadow-color':'rgba(245,158,11,.35)'}},
+    {selector:'node.highlighted',style:{'border-color':'#F59E0B','border-width':3,'shadow-blur':12,'shadow-color':'rgba(245,158,11,.5)'}},
+    {selector:'node.dimmed',style:{'opacity':.12}},{selector:'edge.dimmed',style:{'opacity':.04}},
+  ],
+});
+paperNodes.forEach(n=>paperCy.add({group:'nodes',data:n,style:{'background-color':citColor(n.citations)}}));
+paperEdges.forEach(e=>paperCy.add({group:'edges',data:e}));
+paperCy.layout({name:'cose',idealEdgeLength:130,nodeOverlap:20,fit:true,padding:30,componentSpacing:120,nodeRepulsion:()=>7000,edgeElasticity:()=>80,gravity:100,numIter:1200}).run();
+
+// ============================================================================
+// POSTER RENDER
+// ============================================================================
+function renderPoster(){
+  const scroll=document.getElementById('poster-scroll');
+  const container=document.getElementById('poster-container');
+  const cw=container.clientWidth,ch=container.clientHeight;
+  const usableW=Math.max(620,cw-20),usableH=Math.max(700,ch-10);
+
+  // Center: where the title node sits
+  const cx=usableW/2,cy=usableH/2;
+  const centerR=65;
+
+  // Module positions: 4 corners around center
+  // Top-left, top-right, bottom-left, bottom-right
+  const positions=[
+    {x:cx-180,y:cy-180}, // m1: top-left
+    {x:cx+180,y:cy-180}, // m2: top-right
+    {x:cx-180,y:cy+180}, // m3: bottom-left
+    {x:cx+180,y:cy+180}, // m4: bottom-right
+  ];
+
+  // Build module cards HTML
+  let cardsHTML='';
+  modules.forEach((m,i)=>{
+    const pos=positions[i];
+    const isActive=STATE.selectedModuleId===m.id;
+    // Convert left/top from center coordinates to scroll coordinates
+    const left=pos.x-120; // center card at position
+    const top=pos.y-70;
+    cardsHTML+=`
+      <div class="module-card${isActive?' active':''}" id="mcard-${m.id}" data-module="${m.id}"
+           style="left:${left}px;top:${top}px;border-top:3px solid ${m.color}">
+        <div class="mod-num">Module ${m.num} · ${m.en}</div>
+        <div class="mod-title">${m.title}</div>
+        <div class="mod-tag">${m.tag}</div>
+        <div class="mod-idea">${m.idea}</div>
+        <div class="mod-papers">${m.papers.map(p=>'<span>·</span> '+p).join('<br>')}</div>
+      </div>`;
+  });
+
+  // Build SVG arrows
+  function cardCenter(i){const p=positions[i];return{x:p.x,y:p.y};}
+  // Arrow from center to each module
+  let svgArrows='';
+  arrows.forEach(a=>{
+    const fromIdx=modules.findIndex(m=>m.id===a.from);
+    const toIdx=modules.findIndex(m=>m.id===a.to);
+    if(fromIdx<0||toIdx<0)return;
+    const fc=cardCenter(fromIdx),tc=cardCenter(toIdx);
+    // Curve from right edge of from-card to left edge of to-card
+    const fx=fc.x+120,fy=fc.y;
+    const tx=tc.x-120,ty=tc.y;
+    const midX=(fx+tx)/2,midY=(fy+ty)/2;
+    svgArrows+=`
+      <path d="M${fx},${fy} C${midX},${fy-20} ${midX},${ty-20} ${tx},${ty}"
+            stroke="#A3B89A" stroke-width="2.5" fill="none"
+            marker-end="url(#arrowGreen)"/>
+      <rect x="${midX-50}" y="${midY-20}" width="100" height="18" rx="8"
+            fill="rgba(255,255,255,.88)" stroke="none"/>
+      <text x="${midX}" y="${midY-7}" text-anchor="middle"
+            font-size="11" font-weight="600" fill="#166534" font-family="system-ui,sans-serif">${a.label}</text>`;
+  });
+
+  // Also draw subtle connection lines from center to each module
+  modules.forEach((m,i)=>{
+    const tc=cardCenter(i);
+    svgArrows+=`
+      <line x1="${cx}" y1="${cy+centerR}" x2="${tc.x}" y2="${tc.y-70}"
+            stroke="#D1D5DB" stroke-width="1" stroke-dasharray="4 4" opacity="0.3"/>`;
+  });
+
+  scroll.innerHTML=`
+    <div class="poster-inner" style="position:relative;width:${usableW}px;height:${usableH}px;margin:0 auto">
+      <svg class="poster-svg" viewBox="0 0 ${usableW} ${usableH}" preserveAspectRatio="xMidYMid meet">
+        <defs>
+          <marker id="arrowGreen" markerWidth="10" markerHeight="7" refX="10" refY="3.5" orient="auto">
+            <polygon points="0 0, 10 3.5, 0 7" fill="#A3B89A"/>
+          </marker>
+        </defs>
+        ${svgArrows}
+      </svg>
+
+      <!-- Center title -->
+      <div class="center-node" style="left:${cx-centerR}px;top:${cy-centerR}px">
+        Transformer<br>Attention<br>Evolution
+      </div>
+
+      ${cardsHTML}
+    </div>`;
+
+  // Click handlers
+  scroll.querySelectorAll('.module-card').forEach(card=>{
+    card.addEventListener('click',function(){selectModule(this.dataset.module);});
+  });
+}
+
+setTimeout(renderPoster,200);
+window.addEventListener('resize',()=>{clearTimeout(window._rt);window._rt=setTimeout(renderPoster,200);});
+
+// ============================================================================
+// INTERACTION
+// ============================================================================
+paperCy.on('tap','node',function(evt){selectPaper(evt.target.id());});
+paperCy.on('tap',function(evt){if(evt.target===paperCy)clearAll();});
+
+// Detail drawer
+function showModuleDetail(m,related){
+  if(!m)return;
+  const drawer=document.getElementById('detail-drawer'),content=document.getElementById('detail-content');
+  content.innerHTML=`
+    <div class="detail-col">
+      <div class="detail-col-label">🧬 Module ${m.num} · ${m.en}</div>
+      <div class="title-line">${m.title}</div>
+      <div class="desc-line">${m.idea}</div>
+    </div>
+    <div class="detail-col">
+      <div class="detail-col-label">📚 支撑论文 (${related.length} 篇)</div>
+      ${related.map(pid=>{const p=paperNodes.find(p=>p.id===pid);return p?`<div class="meta-line" style="cursor:pointer;margin:2px 0;padding:2px 6px;border-radius:4px" onmouseover="this.style.background='var(--primary-light)'" onmouseout="this.style.background=''" onclick="selectPaper('${p.id}')">· ${(p.label||'').replace(/\\n/g,' ')} (${p.year}) — ${(p.citations||0).toLocaleString()} 引用</div>`:'';}).join('')}
+    </div>`;
+  drawer.classList.add('open');
+}
+function closeDetail(){document.getElementById('detail-drawer').classList.remove('open');}
+
+// Tooltip
+const tooltip=document.createElement('div');tooltip.className='cy-tooltip';document.body.appendChild(tooltip);
+paperCy.on('mouseover','node',function(evt){
+  const d=evt.target.data(),p=evt.target.renderedPosition();
+  const m=modules.find(m=>m.id===d.moduleId);
+  tooltip.innerHTML=`<div class="tt-title">${(d.label||'').replace(/\n/g,' ')}</div><div class="tt-meta">${d.isFound?'奠基 · ':''}${d.year} · ${(d.citations||0).toLocaleString()} 引用</div><div class="tt-desc">${d.abstract||''}</div><div class="tt-meta" style="margin-top:3px">🧬 ${m?m.title:''}</div>`;
+  tooltip.style.display='block';tooltip.style.left=(p.x+18)+'px';tooltip.style.top=(p.y-10)+'px';
+  evt.target.style('label',(d.label||'').replace(/\n/g,' '));
+});
+paperCy.on('mouseout','node',function(evt){tooltip.style.display='none';if(!evt.target.hasClass('highlighted'))evt.target.style('label','');});
+
+// Toolbar
+function toggleEdges(){paperCy.edges().style('display',document.getElementById('chk-edges').checked?'element':'none');}
+function applyFilters(){
+  const yf=document.getElementById('filter-year').value,cf=document.getElementById('filter-cluster').value;
+  STATE.activeFilters={year:yf,cluster:cf};
+  paperCy.nodes().forEach(n=>{
+    const d=n.data();let s=true;
+    if(yf==='early'&&d.year>2017)s=false;if(yf==='mid'&&(d.year<2019||d.year>2021))s=false;if(yf==='late'&&d.year<2022)s=false;
+    if(cf!=='all'&&d.cluster!==cf)s=false;
+    n.style('display',s?'element':'none');
+  });
+}
+function showToast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove('show'),2500);}
+</script>
+</body>
+</html>

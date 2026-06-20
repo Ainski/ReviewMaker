@@ -639,7 +639,7 @@ def _build_top_papers(x, y, w, papers: list[Paper]) -> tuple[ET.Element, int]:
     return g, new_y
 
 
-def _build_evolution(x, y, w, evo_path: str) -> tuple[ET.Element, int]:
+def _build_evolution(x, y, w, evo_path: str, lineage_caption: str = "") -> tuple[ET.Element, int]:
     g, new_y = _section_header(x, y, w, "\U0001F4C8 算法演进")
     if evo_path and os.path.exists(evo_path):
         try:
@@ -660,6 +660,15 @@ def _build_evolution(x, y, w, evo_path: str) -> tuple[ET.Element, int]:
         g.append(_text(x + 10, new_y + 16, "[无法嵌入]",
                        font_size=SMALL_SIZE, fill="#9E9E9E"))
         new_y += 36
+
+    # Lineage caption
+    if lineage_caption and lineage_caption.strip():
+        caption_lines = _wrap_text(lineage_caption.strip(), w - 12, SMALL_SIZE)
+        for line, _ in caption_lines[:3]:  # at most 3 lines
+            g.append(_text(x + 6, new_y + 6, line,
+                           font_size=SMALL_SIZE, fill=TEXT_SECONDARY))
+            new_y += SMALL_SIZE + 4
+
     return g, new_y
 
 
@@ -798,7 +807,7 @@ def _build_footer(footer_y: int) -> ET.Element:
 # ===========================================================================
 
 def _save_input_snapshot(papers, topic, review_summary, evolution_diagram_path,
-                         output_path, paper_figures) -> None:
+                         output_path, paper_figures, lineage_caption: str = "") -> None:
     papers_data = [dataclasses.asdict(p) for p in papers]
     figs_data = None
     if paper_figures:
@@ -816,6 +825,7 @@ def _save_input_snapshot(papers, topic, review_summary, evolution_diagram_path,
         "evolution_diagram_path": evolution_diagram_path,
         "output_path": output_path, "papers": papers_data,
         "paper_figures": figs_data,
+        "lineage_caption": lineage_caption,
     }
     out_dir = Path(output_path).parent
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -864,6 +874,7 @@ def generate_svg_poster(
     paper_figures: Optional[list[dict]] = None,
     generate_png: bool = True,
     png_scale: float = 3.0,
+    lineage_caption: str = "",
 ) -> str:
     """Generate a self-contained SVG academic poster (and optionally PNG).
 
@@ -873,12 +884,14 @@ def generate_svg_poster(
         If True (default), also produce a PNG via cairosvg.
     png_scale : float
         Viewport scale factor for PNG output (3.0 → ~4800 px wide).
+    lineage_caption : str
+        Optional one-line summary of the algorithm lineage for the evolution panel.
     """
     logger.info(f"生成 SVG 海报: '{topic}'")
 
     # Snapshot
     _save_input_snapshot(papers, topic, review_summary, evolution_diagram_path,
-                         output_path, paper_figures)
+                         output_path, paper_figures, lineage_caption)
 
     content_top = HEADER_H + 24
     _x = MARGIN
@@ -906,7 +919,7 @@ def generate_svg_poster(
     svg.append(g_stats)
     g_top, y2 = _build_top_papers(c2, yc, col_w, papers)
     svg.append(g_top)
-    g_evo, y3 = _build_evolution(c3, yc, col_w, evolution_diagram_path)
+    g_evo, y3 = _build_evolution(c3, yc, col_w, evolution_diagram_path, lineage_caption)
     svg.append(g_evo)
 
     yc = max(y1, y2, y3)

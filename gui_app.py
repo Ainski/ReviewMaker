@@ -75,6 +75,9 @@ def _run_pipeline_thread(job_id: str, topic: str, max_papers: int, year_range: i
         _update_job(job_id, step="正在排序论文...", progress=35)
         papers = rank_papers(papers, topic, year_range=year_range)
         papers = filter_papers(papers, max_papers=max_papers)
+        if not papers:
+            _update_job(job_id, status="error", message="筛选后无相关论文，请尝试扩大搜索范围或调整主题。")
+            return
         _update_job(job_id, progress=45, step=f"已筛选 {len(papers)} 篇论文")
 
         # Step 3b (optional): RAG enrichment
@@ -180,7 +183,8 @@ def _run_pipeline_thread(job_id: str, topic: str, max_papers: int, year_range: i
             _update_job(job_id, step="正在生成海报...", progress=92)
             poster_path = job_dir / "poster.svg"
             generate_svg_poster(papers, topic, review_text, str(evo_path), str(poster_path),
-                                generate_png=True)
+                                generate_png=True,
+                                lineage_caption=poster_caption or "")
 
         # Build paper list data for frontend
         paper_list = []
