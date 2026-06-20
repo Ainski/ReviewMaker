@@ -2105,7 +2105,16 @@ function renderResults(result) {
 
   // Knowledge Map tab (dual-view: poster + network)
   if (result.modules && result.modules.length) {
-    setTimeout(function() { renderKnowledgeMap(result); }, 300);
+    setTimeout(function() { renderKnowledgeMap(result); }, 400);
+  } else {
+    // Show empty state in poster panel
+    var scroll = document.getElementById('poster-scroll');
+    if (scroll) {
+      scroll.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--text-muted);font-size:0.82rem;text-align:center;line-height:1.8">' +
+        '<div>📋<br>知识演进图需要至少 4 篇论文支撑<br>' +
+        '<span style="font-size:0.7rem">当前论文数量: ' + (result.paper_count || 0) + '</span><br>' +
+        '<span style="font-size:0.65rem">请尝试扩大搜索范围或更换主题</span></div></div>';
+    }
   }
 
   // Evolution tab
