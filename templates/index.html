@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>文献综述 Agent 工具</title>
 <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<script src="https://unpkg.com/cytoscape@3.28.1/dist/cytoscape.min.js"></script>
+<link rel="stylesheet" href="/static/css/poster.css">
 <style>
 /* ============================================================
    CSS Custom Properties — Light Theme
@@ -1545,6 +1547,7 @@ body {
     <div class="tabs" id="tabs-bar" style="display: none;">
       <button class="tab active" data-tab="tab-review"><span class="tab-icon"></span> 综述正文</button>
       <button class="tab" data-tab="tab-papers"><span class="tab-icon"></span> 论文列表 <span class="tab-badge" id="paper-count-badge">0</span></button>
+      <button class="tab" data-tab="tab-knowledge"><span class="tab-icon"></span> 知识演进图</button>
       <button class="tab" data-tab="tab-evolution"><span class="tab-icon"></span> 演进图</button>
       <button class="tab" data-tab="tab-poster"><span class="tab-icon"></span> 海报</button>
       <button class="tab" data-tab="tab-refs"><span class="tab-icon"></span> 参考文献</button>
@@ -1566,6 +1569,28 @@ body {
       <div class="img-panel">
         <img id="img-evolution" src="" alt="算法演进图" style="display:none;">
         <div class="caption">算法演进时间线 — 展示论文按年份和方法类别的分布</div>
+      </div>
+    </div>
+    <div class="tab-content" id="tab-knowledge">
+      <div class="dual-view-grid" style="display:flex;gap:14px;height:100%;min-height:500px;">
+        <!-- LEFT: Poster Knowledge Map -->
+        <div class="view-panel poster-panel" style="flex:2;min-width:560px;display:flex;flex-direction:column;background:rgba(255,255,255,0.72);backdrop-filter:blur(18px);border:1px solid var(--border);border-radius:var(--radius-lg);box-shadow:var(--shadow);overflow:hidden;">
+          <div class="view-panel-header" style="padding:12px 18px;border-bottom:1px solid var(--border-light);display:flex;align-items:center;justify-content:space-between;flex-shrink:0;background:var(--surface-hover,#F7F6F4);">
+            <h2 style="font-size:0.82rem;font-weight:600;color:var(--text,#171717);display:flex;align-items:center;gap:6px;">🧬 知识演进图</h2>
+            <span style="font-size:0.65rem;font-weight:600;padding:2px 8px;border-radius:14px;background:var(--primary-light,#F0EEFF);color:var(--primary,#6D5DF6);">Poster Figure 1</span>
+          </div>
+          <div class="view-panel-body" id="poster-container" style="flex:1;position:relative;overflow:hidden;">
+            <div class="poster-scroll" id="poster-scroll"></div>
+          </div>
+        </div>
+        <!-- RIGHT: Paper Network -->
+        <div class="view-panel network-panel" style="flex:0.8;max-width:460px;min-width:0;display:flex;flex-direction:column;background:rgba(255,255,255,0.72);backdrop-filter:blur(18px);border:1px solid var(--border);border-radius:var(--radius-lg);box-shadow:var(--shadow);overflow:hidden;">
+          <div class="view-panel-header" style="padding:12px 18px;border-bottom:1px solid var(--border-light);display:flex;align-items:center;justify-content:space-between;flex-shrink:0;background:var(--surface-hover,#F7F6F4);">
+            <h2 style="font-size:0.82rem;font-weight:600;color:var(--text,#171717);display:flex;align-items:center;gap:6px;">📄 论文关系网络</h2>
+            <span style="font-size:0.65rem;font-weight:600;padding:2px 8px;border-radius:14px;background:var(--success-light,#D1FAE5);color:#207A57;">证据层</span>
+          </div>
+          <div class="view-panel-body" id="network-container" style="flex:1;position:relative;overflow:hidden;"></div>
+        </div>
       </div>
     </div>
     <div class="tab-content" id="tab-poster">
@@ -2078,6 +2103,11 @@ function renderResults(result) {
     renderPaperList(result);
   }
 
+  // Knowledge Map tab (dual-view: poster + network)
+  if (result.modules && result.modules.length) {
+    setTimeout(function() { renderKnowledgeMap(result); }, 300);
+  }
+
   // Evolution tab
   if (result.files && result.files.evolution) {
     const img = document.getElementById('img-evolution');
@@ -2320,14 +2350,93 @@ document.addEventListener('keydown', (e) => {
   if (!e.ctrlKey && !e.metaKey && !e.altKey && jobResult) {
     const target = e.target;
     if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT') return;
-    const tabs = ['tab-review', 'tab-papers', 'tab-evolution', 'tab-poster', 'tab-refs'];
+    const tabs = ['tab-review', 'tab-papers', 'tab-knowledge', 'tab-evolution', 'tab-poster', 'tab-refs'];
     const num = parseInt(e.key);
-    if (num >= 1 && num <= 5) {
+    if (num >= 1 && num <= 6) {
       e.preventDefault();
       switchTab(tabs[num - 1]);
     }
   }
 });
+</script>
+
+<script src="/static/js/network.js"></script>
+<script src="/static/js/poster.js"></script>
+<script>
+// ── Knowledge Map Integration ──
+function renderKnowledgeMap(result) {
+  if (!result || !result.modules || !result.modules.length) return;
+
+  var modules = result.modules;
+  var arrows = result.knowledge_arrows || [];
+
+  // Build paper nodes/edges from result
+  if (result.papers && result.papers.length) {
+    var paperNodesData = [];
+    var paperEdgesData = [];
+    var edgeId = 0;
+
+    result.papers.forEach(function(p, i) {
+      var mod = modules.find(function(m) {
+        return (m.paperIds || []).indexOf(p.arxiv_id) >= 0 ||
+               (m.paperIds || []).indexOf('p' + (i + 1)) >= 0;
+      });
+      paperNodesData.push({
+        id: p.arxiv_id || ('p' + (i + 1)),
+        label: (p.first_author || '') + ' et al.\n"' + (p.title || '').substring(0, 40) + '"',
+        year: p.year || 0,
+        citations: p.citation_count || p.citations || 0,
+        isFound: p.is_foundational || false,
+        cluster: p.method_category || 'unknown',
+        moduleId: mod ? mod.id : null,
+        abstract: (p.abstract || '').substring(0, 120),
+      });
+    });
+
+    // Build simple edges from evidence data
+    if (result.evidence_edges) {
+      result.evidence_edges.forEach(function(e) {
+        paperEdgesData.push({ id: 're' + (++edgeId), source: '' + e.source, target: '' + e.target });
+      });
+    }
+
+    // Init network
+    PaperNetwork.init(paperNodesData, paperEdgesData);
+
+    // Click handler: paper → module
+    var cy = PaperNetwork.getInstance();
+    if (cy) {
+      cy.on('tap', 'node', function(evt) {
+        var node = evt.target;
+        var data = node.data();
+        if (data.moduleId) {
+          PosterMap.selectModule(data.moduleId);
+        }
+      });
+    }
+  }
+
+  // Render poster
+  PosterMap.render(modules, arrows);
+}
+
+// Override showModuleDetail for drawer integration
+window.showModuleDetail = function(m, paperIds) {
+  var drawer = document.getElementById('detail-drawer');
+  var content = document.getElementById('detail-content');
+  if (!drawer || !content || !m) return;
+  content.innerHTML =
+    '<div class="detail-col" style="flex:1;font-size:0.8rem;line-height:1.7">' +
+      '<div class="detail-col-label" style="font-size:0.68rem;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:var(--text-muted);margin-bottom:6px">🧬 Module ' + (m.num || '') + ' · ' + (m.en || '') + '</div>' +
+      '<div class="title-line" style="font-weight:700;font-size:0.9rem;color:var(--text);margin-bottom:4px">' + (m.title || '') + '</div>' +
+      '<div class="desc-line" style="color:var(--text-secondary);margin-top:6px;font-size:0.78rem">' + (m.idea || '') + '</div>' +
+    '</div>' +
+    '<div class="detail-col" style="flex:1;font-size:0.8rem;line-height:1.7">' +
+      '<div class="detail-col-label" style="font-size:0.68rem;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:var(--text-muted);margin-bottom:6px">📚 支撑论文 (' + (paperIds ? paperIds.length : 0) + ' 篇)</div>' +
+      (m.papers || []).map(function(p) { return '<div class="meta-line" style="color:var(--text-secondary);font-size:0.78rem;margin:2px 0">· ' + p + '</div>'; }).join('') +
+    '</div>';
+  drawer.classList.add('open');
+};
 </script>
 
 </body>

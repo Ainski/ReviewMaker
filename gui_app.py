@@ -29,6 +29,7 @@ from src.lineage_graph import build_lineage, _default_llm_call
 from src.lineage_render import render_lineage
 from src.review_generator import generate_lineage_narrative, insert_lineage_section
 from src.svg_poster_generator import generate_svg_poster
+from src.poster_modules import generate_modules
 
 logger = logging.getLogger(__name__)
 
@@ -186,21 +187,48 @@ def _run_pipeline_thread(job_id: str, topic: str, max_papers: int, year_range: i
                                 generate_png=True,
                                 lineage_caption=poster_caption or "")
 
+        # Step 5b: Generate poster knowledge modules (LLM-driven)
+        _update_job(job_id, step="正在生成知识演进图...", progress=94)
+        poster_data = None
+        try:
+            poster_data = generate_modules(
+                papers, topic,
+                api_key=config.deepseek_api_key,
+                model=config.deepseek_model,
+                base_url=config.deepseek_base_url,
+            )
+            _update_job(job_id, progress=96, step="知识演进图已生成")
+        except Exception as e:
+            logger.warning(f"Poster module generation failed, using fallback: {e}")
+            from src.poster_modules import _build_fallback_modules
+            poster_data = _build_fallback_modules(papers, topic)
+
+        # Build evidence edges for network view
+        evidence_edges = []
+        for p in papers:
+            for ref in (p.referenced_works or []):
+                if ref:
+                    evidence_edges.append({"source": ref, "target": p.arxiv_id or p.openalex_id or ""})
+
         # Build paper list data for frontend
         paper_list = []
         for i, p in enumerate(papers, start=1):
             paper_list.append({
                 "index": i,
+                "arxiv_id": p.arxiv_id,
                 "title": p.title,
                 "first_author": p.first_author,
                 "year": p.year,
                 "citations": p.citation_count,
+                "citation_count": p.citation_count,
                 "has_code": p.has_code,
                 "code_urls": p.code_urls,
                 "method_category": p.method_category or "未分类",
                 "key_innovation": p.key_innovation or "",
                 "datasets_used": p.datasets_used,
                 "key_results": p.key_results or "",
+                "abstract": p.abstract or "",
+                "is_foundational": getattr(p, "is_foundational", False),
             })
 
         _update_job(job_id,
@@ -222,7 +250,10 @@ def _run_pipeline_thread(job_id: str, topic: str, max_papers: int, year_range: i
                     "evolution": f"/output/{job_id}/evolution.png",
                     "distribution": f"/output/{job_id}/distribution.png",
                     "poster": f"/output/{job_id}/poster.svg" if poster_path else None,
-                }
+                },
+                "modules": poster_data.get("modules", []) if poster_data else [],
+                "knowledge_arrows": poster_data.get("arrows", []) if poster_data else [],
+                "evidence_edges": evidence_edges[:500],
             },
         )
 

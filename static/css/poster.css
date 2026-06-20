@@ -1,0 +1,154 @@
+/* ============================================================
+   Poster Knowledge Map — Styles
+   Used in the "知识演进图" tab of the ReviewMaker GUI.
+   Matches DESIGN.md design tokens.
+   ============================================================ */
+
+/* Poster scroll container */
+.poster-scroll {
+  height: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+/* Inner flex container centers the diagram */
+.poster-inner {
+  position: relative;
+  min-height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+/* SVG layer for arrows and connector lines */
+.poster-svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* ── Center Theme Node ── */
+.center-node {
+  position: absolute;
+  z-index: 2;
+  background: linear-gradient(135deg, #166534, #2F9E71);
+  color: #fff;
+  border-radius: 50%;
+  width: 150px;
+  height: 150px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  font-size: 0.78rem;
+  font-weight: 700;
+  box-shadow: 0 0 30px rgba(22, 101, 52, 0.2), 0 4px 12px rgba(0, 0, 0, 0.1);
+  line-height: 1.4;
+  cursor: default;
+  pointer-events: auto;
+  transition: all var(--transition, 0.2s ease);
+}
+.center-node:hover {
+  box-shadow: 0 0 40px rgba(22, 101, 52, 0.3);
+  transform: scale(1.03);
+}
+
+/* ── Module Card ── */
+.module-card {
+  position: absolute;
+  z-index: 2;
+  background: var(--surface, #fff);
+  border: 1.5px solid var(--border, #E7E3DC);
+  border-radius: var(--radius-lg, 12px);
+  padding: 16px 18px;
+  width: 240px;
+  box-shadow: var(--shadow, 0 1px 3px rgba(0,0,0,0.06));
+  cursor: pointer;
+  transition: all var(--transition, 0.2s ease);
+  pointer-events: auto;
+  text-align: left;
+}
+.module-card:hover {
+  box-shadow: var(--shadow-md, 0 4px 6px rgba(0,0,0,0.07));
+  border-color: var(--primary, #6D5DF6);
+  transform: translateY(-2px);
+}
+.module-card.active {
+  box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.25), var(--shadow-md, 0 4px 6px rgba(0,0,0,0.07));
+  border-color: #F59E0B;
+}
+
+.module-card .mod-num {
+  font-size: 0.6rem;
+  font-weight: 700;
+  color: var(--text-muted, #96918A);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 4px;
+}
+.module-card .mod-title {
+  font-size: 0.84rem;
+  font-weight: 700;
+  color: var(--text, #171717);
+  margin-bottom: 6px;
+  line-height: 1.3;
+}
+.module-card .mod-tag {
+  display: inline-block;
+  font-size: 0.6rem;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: var(--success-light, #D1FAE5);
+  color: #166534;
+  margin-bottom: 8px;
+}
+.module-card .mod-idea {
+  font-size: 0.7rem;
+  color: var(--text-secondary, #55514A);
+  line-height: 1.6;
+  margin-bottom: 8px;
+}
+.module-card .mod-papers {
+  font-size: 0.64rem;
+  color: var(--text-muted, #96918A);
+  line-height: 1.7;
+  border-top: 1px solid var(--border-light, #F2EFEA);
+  padding-top: 6px;
+}
+.module-card .mod-papers span {
+  color: var(--text-secondary, #55514A);
+  font-weight: 600;
+}
+.module-card .mod-figure {
+  margin-top: 8px;
+  border-radius: 6px;
+  overflow: hidden;
+  background: var(--bg-alt, #FAFAF8);
+  border: 1px solid var(--border-light, #F2EFEA);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 60px;
+  max-height: 100px;
+  font-size: 0.6rem;
+  color: var(--text-muted, #96918A);
+}
+
+/* ── Responsive ── */
+@media (max-width: 1100px) {
+  .poster-inner {
+    transform: scale(0.85);
+    transform-origin: top left;
+  }
+}
+@media (max-width: 700px) {
+  .poster-inner {
+    transform: scale(0.65);
+    transform-origin: top left;
+  }
+}
