@@ -121,3 +121,63 @@ def extract_highlight(review_summary):
     para = _first_para(cc)
     m = re.search(r"(.+?[。！？])", para)
     return (m.group(1) if m else para[:60]).strip()
+
+
+@dataclass
+class TradeoffRow:
+    name: str
+    marks: list = field(default_factory=list)
+
+
+@dataclass
+class Tradeoff:
+    dims: list
+    rows: list
+
+
+_SCENARIO = {"EVICTION": "长上下文", "COMPRESSION": "长上下文",
+             "SYSTEM": "服务器集群", "IO": "服务器集群",
+             "QUANT": "边缘部署", "STORAGE": "边缘部署"}
+
+
+def _scenario(name_en):
+    up = (name_en or "").upper()
+    for k, v in _SCENARIO.items():
+        if k in up:
+            return v
+    return "通用"
+
+
+def build_tradeoff(review_summary, graph):
+    rows = []
+    for b in graph.branches[:3]:
+        members = [m for m in graph.milestones if m.branch == b.id]
+        ratio = (sum(1 for m in members if m.has_code) / len(members)) if members else 0
+        repro = "●" if ratio >= 0.5 else "◐"
+        up = (b.name_en or "").upper()
+        perf = "●" if ("SYSTEM" in up or "IO" in up or "QUANT" in up) else "◐"
+        rows.append(TradeoffRow(b.name_zh, [perf, repro, _scenario(b.name_en)]))
+    return Tradeoff(["性能·效率", "可复现", "适用场景"], rows)
+
+
+@dataclass
+class PosterData:
+    title: str
+    stats: list
+    highlight: str
+    excerpts: list
+    taxonomy: list
+    tradeoff: Tradeoff
+    foot_left: str = "文献综述 Agent · 基于 DeepSeek 大模型自动生成"
+    foot_right: str = "Fig.1 Lineage · OpenAlex 引用骨架"
+
+
+def build_poster_data(topic, review_summary, papers, graph):
+    return PosterData(
+        title=topic,
+        stats=build_stats(graph, papers),
+        highlight=extract_highlight(review_summary),
+        excerpts=select_excerpts(review_summary),
+        taxonomy=build_taxonomy(graph),
+        tradeoff=build_tradeoff(review_summary, graph),
+    )

@@ -39,3 +39,25 @@ def test_extract_highlight_is_first_conclusion_sentence():
     hl = extract_highlight(SAMPLE_REVIEW)
     assert hl.startswith("本综述梳理")
     assert hl.endswith("。")
+
+
+from tests._poster_fixtures import sample_graph as _sg
+from src.poster_data import build_tradeoff, build_poster_data
+
+
+def test_build_tradeoff_dims_and_rows():
+    t = build_tradeoff("", _sg())
+    assert t.dims == ["性能·效率", "可复现", "适用场景"]
+    assert len(t.rows) == 3
+    assert t.rows[0].name == "KV Cache 压缩与淘汰"
+    assert t.rows[0].marks[2] == "长上下文"   # EVICTION scenario
+    assert all(len(r.marks) == 3 for r in t.rows)
+
+
+def test_build_poster_data_full():
+    papers = [_P(True)] * 4
+    d = build_poster_data("我的主题", SAMPLE_REVIEW, papers, _sg())
+    assert d.title == "我的主题"
+    assert len(d.stats) == 4 and len(d.excerpts) == 2
+    assert len(d.taxonomy) == 4 and len(d.tradeoff.rows) == 3
+    assert d.highlight and d.foot_left
