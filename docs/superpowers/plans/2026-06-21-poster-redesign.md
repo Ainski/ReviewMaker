@@ -67,10 +67,8 @@ def sample_graph():
         Branch(id="B", name_zh="系统 / IO-aware 引擎", name_en="SYSTEM / IO-AWARE"),
         Branch(id="C", name_zh="量化 / 紧凑存储", name_en="QUANTIZATION / STORAGE"),
     ]
-    eras = [Era(name_zh="基础奠基时代", name_en="FOUNDATIONS"),
-            Era(name_zh="KV Cache 优化爆发", name_en="KV-CACHE BOOM")]
-    eras[0].y0, eras[0].y1 = 2017, 2023
-    eras[1].y0, eras[1].y1 = 2024, 2026
+    eras = [Era(name_zh="基础奠基时代", name_en="FOUNDATIONS", y0=2017, y1=2023),
+            Era(name_zh="KV Cache 优化爆发", name_en="KV-CACHE BOOM", y0=2024, y1=2026)]
     milestones = [
         _m("Transformer", 2017, FOUND, "提出自注意力"),
         _m("FlashAttention", 2022, FOUND, "IO-aware 精确注意力"),
