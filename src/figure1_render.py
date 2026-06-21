@@ -133,16 +133,12 @@ def render_figure1_svg(graph, embed=False):
     for grp in L["groups"]:
         x, y = grp["x"], grp["y"]
         members = grp["members"]
-        for m, side, level in zip(members, grp["sides"], grp["levels"]):
-            near_r = x > W - PAD["r"] - 40
-            anchor = "end" if near_r else "start"
-            tx = x - 7 if near_r else x + 7
-            ty = y + side * (46 + level * 46)
+        for m, p in zip(members, grp["placements"]):
+            tx, ty, anchor = p["tx"], p["ty"], p["anchor"]
+            bx, _top, w_est, _h = p["bbox"]
             meta = f"{m.authors.upper()} · {m.year}"
-            w_est = max(len(m.name) * 7.2, len(m.authors) * 6 + 40, len(m.contrib) * 10.5) + 8
-            bx = tx - w_est if near_r else tx - 4
             parts.append(f'<line class="fig-line" style="stroke-opacity:.45" stroke-width="0.6" '
-                         f'x1="{x:.1f}" y1="{y:.1f}" x2="{x:.1f}" y2="{ty+(12 if side<0 else -12):.1f}"/>')
+                         f'x1="{x:.1f}" y1="{y:.1f}" x2="{x:.1f}" y2="{ty+(12 if ty < y else -12):.1f}"/>')
             parts.append(f'<rect class="fig-knock" x="{bx:.1f}" y="{ty-12:.1f}" width="{w_est:.1f}" height="40" rx="5"/>')
             parts.append(f'<text class="t-name" x="{tx:.1f}" y="{ty:.1f}" text-anchor="{anchor}">{_esc(m.name)}</text>')
             parts.append(f'<text class="t-meta" x="{tx:.1f}" y="{ty+13:.1f}" text-anchor="{anchor}">{_esc(meta)}</text>')
