@@ -39,7 +39,9 @@ from src.citation_manager import (
     validate_citations,
 )
 from src.evolution_diagram import generate_evolution_diagram, generate_category_distribution_chart
-from src.svg_poster_generator import generate_svg_poster
+from src.milestone_graph import build_milestone_graph
+from src.gui_figure1 import _default_llm_call
+from src.poster_generator import generate_poster
 
 console = Console()
 
@@ -314,22 +316,16 @@ def run_pipeline(args: argparse.Namespace) -> None:
     generate_category_distribution_chart(papers, output_path=dist_path)
     console.print(f"  [green]✓[/green] 类别分布图已保存至 [bold]{dist_path}[/bold]")
 
-    # Poster
+    # Poster (redesigned: figure1 lineage hero + 图文并茂, DESIGN.md style)
     if not args.no_poster:
-        poster_path = os.path.join(output_dir, "poster.svg")
-
-        generate_svg_poster(
-            papers=papers,
-            topic=topic,
-            review_summary=review_text,
-            evolution_diagram_path=evo_path,
-            output_path=poster_path,
-            generate_png=True,
-        )
-        console.print(f"  [green]✓[/green] SVG 海报已保存至 [bold]{poster_path}[/bold]")
-        png_path = poster_path.replace(".svg", ".png")
-        if os.path.exists(png_path):
-            console.print(f"  [green]✓[/green] PNG 海报已保存至 [bold]{png_path}[/bold]")
+        console.print("  正在构建演进谱系并生成海报...")
+        try:
+            graph = build_milestone_graph(papers, topic, llm_call=_default_llm_call())
+            result = generate_poster(topic, review_text, papers, graph, output_dir)
+            poster_path = result.get("png") or result["html"]
+            console.print(f"  [green]✓[/green] 海报已保存至 [bold]{poster_path}[/bold]")
+        except Exception as e:
+            console.print(f"  [yellow]![/yellow] 海报生成失败: {e}")
 
     # ---- Summary ----
     console.print()

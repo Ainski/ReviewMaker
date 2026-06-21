@@ -31,22 +31,22 @@ def _fake_llm(_prompt):
 
 def test_generate_figure1_writes_files(tmp_path):
     papers = [_paper(i) for i in range(1, 7)]
-    metrics = generate_figure1(papers, "KV", tmp_path, llm_call=_fake_llm, client=FakeClient())
+    graph = generate_figure1(papers, "KV", tmp_path, llm_call=_fake_llm, client=FakeClient())
     assert (tmp_path / "evolution.svg").exists()
     assert (tmp_path / "evolution_nodes.json").exists()
     svg = (tmp_path / "evolution.svg").read_text(encoding="utf-8")
     assert svg.startswith("<svg")
     nodes = json.loads((tmp_path / "evolution_nodes.json").read_text(encoding="utf-8"))
     assert isinstance(nodes, list) and len(nodes) > 0
-    assert metrics["num_milestones"] >= 6
+    assert graph.metrics["num_milestones"] >= 6
 
 
 def test_generate_figure1_insufficient(tmp_path):
     papers = [_paper(1)]
-    metrics = generate_figure1(papers, "KV", tmp_path,
-                               llm_call=lambda p: '{"milestones":[],"branches":[],"eras":[],"foundational":[]}',
-                               client=FakeClient())
+    graph = generate_figure1(papers, "KV", tmp_path,
+                             llm_call=lambda p: '{"milestones":[],"branches":[],"eras":[],"foundational":[]}',
+                             client=FakeClient())
     assert (tmp_path / "evolution.svg").exists()
     svg = (tmp_path / "evolution.svg").read_text(encoding="utf-8")
     assert "信息不足" in svg
-    assert metrics["num_milestones"] == 0
+    assert graph.metrics["num_milestones"] == 0
