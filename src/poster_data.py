@@ -152,11 +152,22 @@ def build_lineage_excerpt(review_summary, budget=220):
                    "— 节选自综述「算法演进脉络」", text)
 
 
-_TREND_RE = re.compile(r"[0-9０-９%％]|首次|显著|大幅|主流|趋势|普遍|一致|未来|融合|突破|核心|关键")
+# Citation markers like "[2, 5, 6, 9]" — stripped so reference numbers don't
+# masquerade as quantitative impact, and don't clutter the pull-quote.
+_CITE_RE = re.compile(r"\s*[\[(（【][\d\s,，、;；\-–~至]+[\])）】]")
+# Real quantitative results (percent / speedup / points) — NOT bare digits.
+_QUANT_RE = re.compile(r"\d+(?:\.\d+)?\s*(?:%|％|‰|倍|×|个百分点|个点|分点)")
+# Impactful trend / conclusion words (dropped weak 一致/普遍/核心/关键).
+_TREND_RE = re.compile(r"首次|显著|大幅|主流|趋势|未来|融合|突破|领先|超越|主导|颠覆|革新")
 
 
 def _sentences(text):
     return [s.strip() for s in re.findall(r".+?[。！？]", text or "") if s.strip()]
+
+
+def _highlight_score(s):
+    """Quantitative results weigh double; bare digits / citations don't count."""
+    return len(_QUANT_RE.findall(s)) * 2 + len(_TREND_RE.findall(s))
 
 
 def extract_highlight(review_summary):
@@ -164,12 +175,13 @@ def extract_highlight(review_summary):
     body = (_find(secs, ["结论", "总结", "趋势", "未来", "展望"])
             or _find(secs, ["对比"])
             or (secs[-1][1] if secs else review_summary))
-    sents = _sentences(body)
+    sents = [_CITE_RE.sub("", s).strip() for s in _sentences(body)]
+    sents = [s for s in sents if s]
     if not sents:
-        return (_first_para(body)[:60]).strip()
+        return _CITE_RE.sub("", _first_para(body)[:60]).strip()
     best_i, best_score = 0, -1
     for i, s in enumerate(sents):
-        score = len(_TREND_RE.findall(s))
+        score = _highlight_score(s)
         if score > best_score:
             best_score, best_i = score, i
     return sents[best_i]

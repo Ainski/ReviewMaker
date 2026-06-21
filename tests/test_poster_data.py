@@ -106,3 +106,22 @@ def test_extract_block_respects_budget():
     body = "。".join(f"句子{i}" for i in range(50)) + "。"
     out = _extract_block(body, 60)
     assert len(out) <= 62  # budget + 收尾标点容差
+
+
+def test_extract_highlight_ignores_citation_numbers():
+    review = ("# R\n\n## 六、横向对比分析\n\n"
+              "本综述涉及的论文在实验设置中高度一致地使用了 LongBench 作为主要的基准测试数据集 "
+              "[2, 5, 6, 9, 10, 12, 13, 14, 15, 16, 18, 20]。"
+              "未来的趋势是多种优化方法的深度融合与在线自适应。")
+    hl = extract_highlight(review)
+    assert "LongBench" not in hl     # 不再被引用编号刷分选成数据集统计句
+    assert "深度融合" in hl           # 选了真正的趋势句
+    assert "[" not in hl             # 引用编号已剥离
+
+
+def test_extract_highlight_prefers_real_quantities():
+    review = ("# R\n\n## 九、结论\n\n"
+              "本方法在多个数据集上进行了充分验证。"
+              "实验表明本方法实现 2.3 倍加速并降低 40% 显存。")
+    hl = extract_highlight(review)
+    assert "2.3 倍" in hl or "40%" in hl   # 含真实量化的那句胜出
