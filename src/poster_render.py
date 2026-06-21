@@ -68,6 +68,7 @@ _STYLE = r"""
   /* serif highlight (pulled from review conclusion) */
   .highlight{font-family:var(--serif);font-weight:400;font-size:22px;line-height:1.5;
     color:var(--text);margin:24px 0 6px;padding-left:18px;border-left:3px solid var(--primary);}
+  .lineage{margin-top:22px;}
 
   /* 图文穿插 bands */
   .band{display:flex;gap:46px;margin-top:24px;align-items:flex-start;}
@@ -164,6 +165,7 @@ def render_poster_html(data, hero_svg):
 <div class="rule36"></div>
 <div class="stats">{stats}</div>
 <div class="figwrap">{hero_svg}<div class="caption">Fig. 1 — Method Evolution Timeline</div></div>
+{('<div class="lineage">' + _excerpt(data.lineage) + '</div>') if getattr(data, "lineage", None) else ''}
 <div class="highlight">"{_esc(data.highlight)}"</div>
 <div class="band"><div class="col-text">{_excerpt(data.excerpts[0])}</div>
 <div class="col-viz"><div class="sec-h"><span class="zh">方法体系分类</span>

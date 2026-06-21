@@ -92,6 +92,27 @@ def _truncate(text, limit=150):
     return cut + "…"
 
 
+def _budget(n_papers: int) -> int:
+    """Adaptive character budget for poster prose, scaled by paper count."""
+    if n_papers >= 23:
+        return 420
+    if n_papers >= 15:
+        return 320
+    return 220
+
+
+def _extract_block(body: str, budget: int) -> str:
+    """Join non-table/heading/list paragraphs, then truncate to budget at a
+    sentence boundary. Richer than _first_para (which took only one paragraph)."""
+    paras = []
+    for para in re.split(r"\n\s*\n", body or ""):
+        p = para.strip()
+        if p and p[0] not in "|#-!":
+            paras.append(p)
+    joined = " ".join(paras).strip()
+    return _truncate(joined, budget)
+
+
 def _find(secs, keys):
     for title, body in secs:
         if any(k in title for k in keys):
@@ -99,28 +120,71 @@ def _find(secs, keys):
     return None
 
 
-def select_excerpts(review_summary):
+def select_excerpts(review_summary, budget=220, exclude=""):
     secs = _sections(review_summary)
-    bg = _find(secs, ["研究背景", "背景", "摘要", "引言", "问题定义"])
-    cc = _find(secs, ["结论", "总结"])
-    if bg is None:
-        bg = secs[0][1] if secs else review_summary
-    if cc is None:
-        cc = secs[-1][1] if secs else review_summary
+    bg = (_find(secs, ["研究背景", "背景", "摘要", "引言", "问题定义"])
+          or (secs[0][1] if secs else review_summary))
+    cc = (_find(secs, ["对比", "趋势"])
+          or _find(secs, ["结论", "总结"])
+          or (secs[-1][1] if secs else review_summary))
+    bg_text = _extract_block(bg, budget)
+    cc_text = _extract_block(cc, budget)
+    if exclude:
+        cc_text = re.sub(r"\s{2,}", " ", cc_text.replace(exclude, "")).strip()
     return [
         Excerpt("研究背景与问题定义", "Background · 摘要节选",
-                "— 节选自综述「研究背景 / 摘要」", _truncate(_first_para(bg))),
-        Excerpt("核心结论与趋势", "Key Findings · 结论节选",
-                "— 节选自综述「结论」", _truncate(_first_para(cc))),
+                "— 节选自综述「研究背景 / 摘要」", bg_text),
+        Excerpt("核心结论与趋势", "Key Findings · 对比与结论",
+                "— 节选自综述「横向对比 / 结论」", cc_text),
     ]
+
+
+def build_lineage_excerpt(review_summary, budget=220):
+    secs = _sections(review_summary)
+    body = (_find(secs, ["演进脉络", "脉络", "演进"])
+            or _find(secs, ["方法分类", "方法体系", "分类"]))
+    if not body:
+        return None
+    text = _extract_block(body, budget)
+    if not text:
+        return None
+    return Excerpt("算法演进脉络", "Lineage Narrative · 演进叙述",
+                   "— 节选自综述「算法演进脉络」", text)
+
+
+# Citation markers like "[2, 5, 6, 9]" — stripped so reference numbers don't
+# masquerade as quantitative impact, and don't clutter the pull-quote.
+_CITE_RE = re.compile(r"\s*[\[(（【][\d\s,，、;；\-–~至]+[\])）】]")
+# Real quantitative results (percent / speedup / points) — NOT bare digits.
+_QUANT_RE = re.compile(r"\d+(?:\.\d+)?\s*(?:%|％|‰|倍|×|个百分点|个点|分点)")
+# Impactful trend / conclusion words (dropped weak 一致/普遍/核心/关键).
+_TREND_RE = re.compile(r"首次|显著|大幅|主流|趋势|未来|融合|突破|领先|超越|主导|颠覆|革新")
+
+
+def _sentences(text):
+    return [s.strip() for s in re.findall(r".+?[。！？]", text or "") if s.strip()]
+
+
+def _highlight_score(s):
+    """Quantitative results weigh double; bare digits / citations don't count."""
+    return len(_QUANT_RE.findall(s)) * 2 + len(_TREND_RE.findall(s))
 
 
 def extract_highlight(review_summary):
     secs = _sections(review_summary)
-    cc = _find(secs, ["结论", "总结"]) or (secs[-1][1] if secs else review_summary)
-    para = _first_para(cc)
-    m = re.search(r"(.+?[。！？])", para)
-    return (m.group(1) if m else para[:60]).strip()
+    body = (_find(secs, ["结论", "总结", "趋势", "未来", "展望"])
+            or _find(secs, ["对比"])
+            or (secs[-1][1] if secs else review_summary))
+    sents = [_CITE_RE.sub("", s).strip() for s in _sentences(body)]
+    sents = [s for s in sents if s]
+    if not sents:
+        return _CITE_RE.sub("", _first_para(body)[:60]).strip()
+    best_i, best_score = 0, -1
+    for i, s in enumerate(sents):
+        score = _highlight_score(s)
+        if score > best_score:
+            best_score, best_i = score, i
+    return sents[best_i]
 
 
 @dataclass
@@ -168,16 +232,21 @@ class PosterData:
     excerpts: list
     taxonomy: list
     tradeoff: Tradeoff
+    lineage: object = None  # Excerpt | None
     foot_left: str = "文献综述 Agent · 基于 DeepSeek 大模型自动生成"
     foot_right: str = "Fig.1 Lineage · OpenAlex 引用骨架"
 
 
 def build_poster_data(topic, review_summary, papers, graph):
+    n = len(papers)
+    budget = _budget(n)
+    highlight = extract_highlight(review_summary)
     return PosterData(
         title=topic,
         stats=build_stats(graph, papers),
-        highlight=extract_highlight(review_summary),
-        excerpts=select_excerpts(review_summary),
+        highlight=highlight,
+        excerpts=select_excerpts(review_summary, budget, exclude=highlight),
+        lineage=build_lineage_excerpt(review_summary, budget),
         taxonomy=build_taxonomy(graph),
         tradeoff=build_tradeoff(review_summary, graph),
     )

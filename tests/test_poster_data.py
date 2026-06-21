@@ -21,12 +21,24 @@ def test_build_taxonomy_counts_and_normalizes():
     assert max(b.width_pct for b in bars) == 100
 
 
-def test_select_excerpts_finds_background_and_conclusion():
-    ex = select_excerpts(SAMPLE_REVIEW)
+def test_select_excerpts_thicker_and_deduped():
+    ex = select_excerpts(SAMPLE_REVIEW, budget=320,
+                         exclude="未来的突破将更依赖多种优化技术的深度融合、对任务动态特性的在线感知。")
     assert len(ex) == 2
     assert "KV Cache 技术应运而生" in ex[0].text
-    assert "深度融合" in ex[1].text
-    assert "结论" in ex[1].source
+    assert len(ex[0].text) > 150                 # 做厚:超过旧的 150 截断
+    assert "量化类方法" in ex[1].text             # 核心结论换源到「横向对比」
+    assert "深度融合" not in ex[1].text           # 去重:highlight 那句不重复出现
+
+
+def test_build_lineage_excerpt_from_section_and_fallback_none():
+    from src.poster_data import build_lineage_excerpt
+    ex = build_lineage_excerpt(SAMPLE_REVIEW, budget=320)
+    assert ex is not None
+    assert "演进" in ex.heading
+    assert "自注意力" in ex.text or "FlashAttention" in ex.text
+    # 没有演进脉络/方法分类节 -> None
+    assert build_lineage_excerpt("# 标题\n\n## 引言\n\n正文。") is None
 
 
 def test_select_excerpts_fallback_when_no_sections():
@@ -35,9 +47,11 @@ def test_select_excerpts_fallback_when_no_sections():
     assert ex[0].text  # non-empty fallback
 
 
-def test_extract_highlight_is_first_conclusion_sentence():
+def test_extract_highlight_picks_most_impactful_sentence():
     hl = extract_highlight(SAMPLE_REVIEW)
-    assert hl.startswith("本综述梳理")
+    # 含"未来/突破/融合"三个趋势词的那句,胜过仅含"关键"的首句
+    assert "深度融合" in hl
+    assert "本综述梳理" not in hl
     assert hl.endswith("。")
 
 
@@ -55,9 +69,59 @@ def test_build_tradeoff_dims_and_rows():
 
 
 def test_build_poster_data_full():
-    papers = [_P(True)] * 4
+    papers = [_P(True)] * 25  # 大评论:走 420 预算
     d = build_poster_data("我的主题", SAMPLE_REVIEW, papers, _sg())
     assert d.title == "我的主题"
     assert len(d.stats) == 4 and len(d.excerpts) == 2
     assert len(d.taxonomy) == 4 and len(d.tradeoff.rows) == 3
     assert d.highlight and d.foot_left
+    assert d.lineage is not None and "演进" in d.lineage.heading
+    # highlight 不在核心结论里(去重)
+    assert d.highlight not in d.excerpts[1].text
+
+
+from src.poster_data import _budget
+
+
+def test_budget_scales_with_paper_count_and_caps():
+    assert _budget(10) == 220
+    assert _budget(20) == 320
+    assert _budget(25) == 420
+    assert _budget(100) == 420  # 硬上限
+
+
+from src.poster_data import _extract_block
+
+
+def test_extract_block_joins_paragraphs_up_to_budget():
+    body = "第一段甲乙丙。\n\n第二段丁戊己。\n\n| 表格行 | 不要 |\n\n第三段庚辛壬。"
+    out = _extract_block(body, 200)
+    assert "第一段甲乙丙" in out
+    assert "第二段丁戊己" in out
+    assert "表格行" not in out          # 跳过表格行
+    assert len(out) > len("第一段甲乙丙。")  # 比单段更厚
+
+
+def test_extract_block_respects_budget():
+    body = "。".join(f"句子{i}" for i in range(50)) + "。"
+    out = _extract_block(body, 60)
+    assert len(out) <= 62  # budget + 收尾标点容差
+
+
+def test_extract_highlight_ignores_citation_numbers():
+    review = ("# R\n\n## 六、横向对比分析\n\n"
+              "本综述涉及的论文在实验设置中高度一致地使用了 LongBench 作为主要的基准测试数据集 "
+              "[2, 5, 6, 9, 10, 12, 13, 14, 15, 16, 18, 20]。"
+              "未来的趋势是多种优化方法的深度融合与在线自适应。")
+    hl = extract_highlight(review)
+    assert "LongBench" not in hl     # 不再被引用编号刷分选成数据集统计句
+    assert "深度融合" in hl           # 选了真正的趋势句
+    assert "[" not in hl             # 引用编号已剥离
+
+
+def test_extract_highlight_prefers_real_quantities():
+    review = ("# R\n\n## 九、结论\n\n"
+              "本方法在多个数据集上进行了充分验证。"
+              "实验表明本方法实现 2.3 倍加速并降低 40% 显存。")
+    hl = extract_highlight(review)
+    assert "2.3 倍" in hl or "40%" in hl   # 含真实量化的那句胜出
