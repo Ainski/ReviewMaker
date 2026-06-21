@@ -45,9 +45,10 @@ def extract_datasets_from_evidence(text: str) -> list[str]:
         return []
 
     found: list[str] = []
-    lower = text.lower()
     for name in COMMON_BENCHMARKS:
-        if name.lower() in lower:
+        # Word-boundary match so "SPEC" doesn't fire on "specific", "ARC" on
+        # "research"/"hierarchical", "MATH" on "mathematical", etc.
+        if re.search(r"\b" + re.escape(name) + r"\b", text, flags=re.IGNORECASE):
             found.append(name)
 
     context_patterns = [
@@ -380,7 +381,7 @@ def extract_paper_details(
 
 - key_innovation: 主要算法或方法创新点（一句话，中文）
 - datasets_used: 证据中明确提到的数据集、Benchmark、Workload、Trace、评测任务或硬件/系统负载名称列表；例如 MMLU、LongBench、ShareGPT traces、MLPerf、SPEC、A100/H100 workloads。没有明确名称则返回 []
-- key_results: 证据中明确提到的关键定量结果、效率提升、性能指标或主要发现，必须用中文句子概括；数值、倍率、百分比、指标名可以保留原文。没有明确结果则写 "证据未明确说明"
+- key_results: 该工作的关键结果或核心结论，用中文一句话概括。优先采用证据中明确的定量结果（数值、倍率、百分比、指标名可保留原文）；若摘要只给出定性结论或作者声称的主要改进/优势，也据此概括为定性结果。若该论文是综述/Survey/Review，则概括其主要结论或综述范围（如"系统综述了X类方法并指出Y关键挑战"）。仅当摘要完全没有任何结果、结论或贡献陈述时，才写 "证据未明确说明"
 - method_category: 方法类别标签，如 "Transformer类"、"图神经网络类"、"强化学习类"、"扩散模型类"、"注意力机制类"、"系统优化类" 等
 - evidence_source: 信息主要来自 "摘要"、"全文片段" 或 "摘要+全文片段"
 - confidence: 0 到 1 的置信度，全文片段中有明确数据集/结果时置信度应更高
