@@ -17,7 +17,7 @@
 | D2 | 视觉系统 | **DESIGN.md（GUI 系统）整合**：暖灰底 `#F6F5F3` + 白色 surface 卡片 + 克制紫色 accent `#6D5DF6`；内容排版沿用编辑风（Jost / Lora / JetBrains Mono + 1px 发丝线）。〔注：因海报需嵌入 GUI，从最初的纯 Ivory Ledger 调整为 DESIGN.md 背景 + 编辑风内容的融合〕 |
 | D3 | 内容 | **图文并茂**：可视化 + **1~2 段综述原文节选**穿插 |
 | D4 | 内容选取 | **demo 级简单截取**（直接切取段落，如 摘要/研究背景 + 结论），**不做严格 LLM 筛选** |
-| D5 | 渲染 | 静态、非交互、高分辨率；**浏览器（Playwright）栅格化**取得 Jost/Lora 等 Web 字体保真。〔**待确认**见 §6 渲染决策〕 |
+| D5 | 渲染 | **HTML/CSS 编排（内嵌 figure1 静态 SVG）→ Playwright 栅格化 PNG/PDF**；静态、非交互、高分辨率，Web 字体保真。理由见 §6（已确认）。 |
 | D6 | hero | **figure1 里程碑谱系图**为视觉主角（复用 `figure1_render`） |
 | D7 | 辅助可视化 | **方法体系分类（柱状）** + **横向对比（矩阵）** 两个 |
 
@@ -80,9 +80,11 @@ DESIGN.md 落点：页面 `--bg` + 顶部淡紫径向光；海报 = `--surface` 
 
 旧 `svg_poster_generator.py` / PIL `poster_generator.py` 标记为 legacy：管线切到新生成器后保留代码但不再调用；相关旧测试按需退役（见 §7）。
 
-## 6. 渲染决策〔需你在 spec review 确认〕
+## 6. 渲染决策（已确认 2026-06-21）
 
-**推荐：HTML/CSS 编排（内嵌 hero inline SVG）→ Playwright 栅格化 PNG（+ 可选 PDF 矢量）。**
+**结论：HTML/CSS 编排（内嵌 figure1 静态 SVG）→ Playwright 栅格化 PNG（+ 可选 PDF 矢量）。**
+
+**澄清（回应「减少工作量」）**：figure1 演进图由 `figure1_render.render_figure1_svg(graph)` 以纯 Python 字符串拼装产出**自包含静态 SVG**（无浏览器、无 JS；GUI 点击详情只是 `evolution_nodes.json` 叠加层）。海报**直接内联这段静态 SVG 字符串**即可，零重渲染、零转换——v3 mockup 用 JS 重画只是独立 demo 无后端时的权宜，真实实现不需要。HTML 路线既直接复用该静态 SVG、又用自动排版处理整段 prose（手写 SVG 折行 prose 才是真正费工处），**总工作量最低**，故据「减少工作量」标准选定。
 
 - 理由：海报需 **嵌入 GUI**（GUI 即 HTML，DESIGN.md 玻璃拟态阴影/圆角/径向渐变在 HTML/CSS 天然）；且含 **整段中文 prose**，HTML 自动排版/对齐远优于手写 SVG `<text>` 逐字折行。产物静态、非交互；PDF 即矢量、PNG 高 DPI 即清晰，满足「静态矢量级」诉求。GUI「海报」tab 直接内嵌该 HTML/或其 PNG。
 - 与 Q9「SVG 编排」的关系：Q9 选择早于「嵌入 GUI + 图文并茂」两条要求；这两条要求出现后，HTML 明显更省力且效果更好，故建议修订。**若你坚持单文件 SVG 产物**，备选：整张海报手写为一个自包含 SVG（hero 复用 + 辅助可视化用 SVG rect + prose 用现有 SVG 折行逻辑），同样浏览器栅格化——可行但 prose 排版较弱、工作量更大。
