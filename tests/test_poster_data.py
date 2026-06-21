@@ -69,12 +69,15 @@ def test_build_tradeoff_dims_and_rows():
 
 
 def test_build_poster_data_full():
-    papers = [_P(True)] * 4
+    papers = [_P(True)] * 25  # 大评论:走 420 预算
     d = build_poster_data("我的主题", SAMPLE_REVIEW, papers, _sg())
     assert d.title == "我的主题"
     assert len(d.stats) == 4 and len(d.excerpts) == 2
     assert len(d.taxonomy) == 4 and len(d.tradeoff.rows) == 3
     assert d.highlight and d.foot_left
+    assert d.lineage is not None and "演进" in d.lineage.heading
+    # highlight 不在核心结论里(去重)
+    assert d.highlight not in d.excerpts[1].text
 
 
 from src.poster_data import _budget

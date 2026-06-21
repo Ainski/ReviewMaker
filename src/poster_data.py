@@ -220,16 +220,21 @@ class PosterData:
     excerpts: list
     taxonomy: list
     tradeoff: Tradeoff
+    lineage: object = None  # Excerpt | None
     foot_left: str = "文献综述 Agent · 基于 DeepSeek 大模型自动生成"
     foot_right: str = "Fig.1 Lineage · OpenAlex 引用骨架"
 
 
 def build_poster_data(topic, review_summary, papers, graph):
+    n = len(papers)
+    budget = _budget(n)
+    highlight = extract_highlight(review_summary)
     return PosterData(
         title=topic,
         stats=build_stats(graph, papers),
-        highlight=extract_highlight(review_summary),
-        excerpts=select_excerpts(review_summary),
+        highlight=highlight,
+        excerpts=select_excerpts(review_summary, budget, exclude=highlight),
+        lineage=build_lineage_excerpt(review_summary, budget),
         taxonomy=build_taxonomy(graph),
         tradeoff=build_tradeoff(review_summary, graph),
     )
