@@ -21,12 +21,24 @@ def test_build_taxonomy_counts_and_normalizes():
     assert max(b.width_pct for b in bars) == 100
 
 
-def test_select_excerpts_finds_background_and_conclusion():
-    ex = select_excerpts(SAMPLE_REVIEW)
+def test_select_excerpts_thicker_and_deduped():
+    ex = select_excerpts(SAMPLE_REVIEW, budget=320,
+                         exclude="未来的突破将更依赖多种优化技术的深度融合、对任务动态特性的在线感知。")
     assert len(ex) == 2
     assert "KV Cache 技术应运而生" in ex[0].text
-    assert "深度融合" in ex[1].text
-    assert "结论" in ex[1].source
+    assert len(ex[0].text) > 150                 # 做厚:超过旧的 150 截断
+    assert "量化类方法" in ex[1].text             # 核心结论换源到「横向对比」
+    assert "深度融合" not in ex[1].text           # 去重:highlight 那句不重复出现
+
+
+def test_build_lineage_excerpt_from_section_and_fallback_none():
+    from src.poster_data import build_lineage_excerpt
+    ex = build_lineage_excerpt(SAMPLE_REVIEW, budget=320)
+    assert ex is not None
+    assert "演进" in ex.heading
+    assert "自注意力" in ex.text or "FlashAttention" in ex.text
+    # 没有演进脉络/方法分类节 -> None
+    assert build_lineage_excerpt("# 标题\n\n## 引言\n\n正文。") is None
 
 
 def test_select_excerpts_fallback_when_no_sections():

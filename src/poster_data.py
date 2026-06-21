@@ -120,20 +120,36 @@ def _find(secs, keys):
     return None
 
 
-def select_excerpts(review_summary):
+def select_excerpts(review_summary, budget=220, exclude=""):
     secs = _sections(review_summary)
-    bg = _find(secs, ["研究背景", "背景", "摘要", "引言", "问题定义"])
-    cc = _find(secs, ["结论", "总结"])
-    if bg is None:
-        bg = secs[0][1] if secs else review_summary
-    if cc is None:
-        cc = secs[-1][1] if secs else review_summary
+    bg = (_find(secs, ["研究背景", "背景", "摘要", "引言", "问题定义"])
+          or (secs[0][1] if secs else review_summary))
+    cc = (_find(secs, ["对比", "趋势"])
+          or _find(secs, ["结论", "总结"])
+          or (secs[-1][1] if secs else review_summary))
+    bg_text = _extract_block(bg, budget)
+    cc_text = _extract_block(cc, budget)
+    if exclude:
+        cc_text = re.sub(r"\s{2,}", " ", cc_text.replace(exclude, "")).strip()
     return [
         Excerpt("研究背景与问题定义", "Background · 摘要节选",
-                "— 节选自综述「研究背景 / 摘要」", _truncate(_first_para(bg))),
-        Excerpt("核心结论与趋势", "Key Findings · 结论节选",
-                "— 节选自综述「结论」", _truncate(_first_para(cc))),
+                "— 节选自综述「研究背景 / 摘要」", bg_text),
+        Excerpt("核心结论与趋势", "Key Findings · 对比与结论",
+                "— 节选自综述「横向对比 / 结论」", cc_text),
     ]
+
+
+def build_lineage_excerpt(review_summary, budget=220):
+    secs = _sections(review_summary)
+    body = (_find(secs, ["演进脉络", "脉络", "演进"])
+            or _find(secs, ["方法分类", "方法体系", "分类"]))
+    if not body:
+        return None
+    text = _extract_block(body, budget)
+    if not text:
+        return None
+    return Excerpt("算法演进脉络", "Lineage Narrative · 演进叙述",
+                   "— 节选自综述「算法演进脉络」", text)
 
 
 _TREND_RE = re.compile(r"[0-9０-９%％]|首次|显著|大幅|主流|趋势|普遍|一致|未来|融合|突破|核心|关键")
