@@ -39,3 +39,4 @@ tmp_*.py
 *.tmp
 /test_*.*
 /output/test_poster.*
+.claude/

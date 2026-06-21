@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>算法演进图 — 嵌入 ReviewMaker 框架预览</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Jost:wght@200;300;400;500&family=JetBrains+Mono:wght@400;500&family=Noto+Sans+SC:wght@300;400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --primary:#6D5DF6;--primary-hover:#5B4BE0;--primary-light:#F0EEFF;--primary-glow:rgba(109,93,246,.18);
+    --bg:#F6F5F3;--bg-alt:#FAFAF8;--surface:#FFFFFF;--surface-hover:#F7F6F4;
+    --border:#E7E3DC;--border-light:#F2EFEA;
+    --text:#171717;--text-secondary:#55514A;--text-muted:#96918A;
+    --success:#2F9E71;--radius:10px;--radius-lg:12px;--radius-xl:14px;
+    --shadow-sm:0 1px 2px 0 rgb(0 0 0/.05);
+    --shadow-md:0 4px 6px -1px rgb(0 0 0/.07),0 2px 4px -2px rgb(0 0 0/.05);
+    --font:-apple-system,"PingFang SC","Hiragino Sans GB","Microsoft YaHei","Noto Sans SC",sans-serif;
+    --mono:"JetBrains Mono",monospace;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{background:var(--bg);color:var(--text);font-family:var(--font);padding:22px;
+    background-image:radial-gradient(1200px 400px at 80% -5%,rgba(109,93,246,.05),transparent);}
+  .frame{max-width:1500px;margin:0 auto;}
+  .tabs{display:flex;gap:4px;background:var(--surface);border:1px solid var(--border);
+    border-radius:var(--radius-xl) var(--radius-xl) 0 0;padding:8px 8px 0;box-shadow:var(--shadow-sm);}
+  .tab{padding:9px 18px;font-size:.82rem;color:var(--text-muted);border-radius:8px 8px 0 0;cursor:pointer;}
+  .tab.active{color:var(--text);font-weight:600;background:var(--surface-hover);}
+  .main{background:var(--surface);border:1px solid var(--border);border-top:none;
+    border-radius:0 0 var(--radius-xl) var(--radius-xl);padding:24px 28px 28px;box-shadow:var(--shadow-md);}
+  .card-head{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px;}
+  .card-head h2{font-size:1.05rem;font-weight:700;letter-spacing:-.01em;}
+  .card-head .meta{font-family:var(--mono);font-size:.66rem;letter-spacing:.12em;text-transform:uppercase;color:var(--text-muted);}
+  .toolbar{display:flex;gap:8px;align-items:center;margin:8px 0 4px;}
+  .toolbar .lbl{font-family:var(--mono);font-size:.62rem;letter-spacing:.12em;text-transform:uppercase;color:var(--text-muted);}
+  .toggle{display:inline-flex;border:1px solid var(--border);border-radius:7px;overflow:hidden;}
+  .toggle button{border:none;background:var(--surface);padding:5px 11px;font-size:.7rem;cursor:pointer;font-family:var(--mono);
+    letter-spacing:.08em;text-transform:uppercase;color:var(--text-muted);}
+  .toggle button.active{background:var(--primary);color:#fff;}
+  .figwrap{border:1px solid var(--border-light);border-radius:var(--radius-lg);background:var(--surface);margin-top:10px;overflow:hidden;}
+  svg{width:100%;height:auto;display:block;}
+  .caption{font-family:var(--mono);font-size:.66rem;letter-spacing:.1em;color:var(--text-muted);
+    text-align:center;padding:10px 0 4px;}
+  /* detail panel */
+  .detail{margin-top:14px;border:1px solid var(--border);border-radius:var(--radius-lg);
+    background:var(--bg-alt);padding:16px 18px;min-height:96px;transition:all .2s;}
+  .detail.empty{display:flex;align-items:center;justify-content:center;color:var(--text-muted);font-size:.8rem;}
+  .detail .d-top{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;}
+  .detail .d-title{font-size:1rem;font-weight:700;color:var(--text);line-height:1.35;}
+  .detail .d-sub{font-family:var(--mono);font-size:.66rem;letter-spacing:.1em;text-transform:uppercase;color:var(--primary);margin-top:3px;}
+  .detail .d-badges{display:flex;gap:6px;flex-shrink:0;}
+  .badge{font-size:.66rem;padding:3px 9px;border-radius:7px;font-weight:600;white-space:nowrap;}
+  .badge.cite{background:var(--primary-light);color:var(--primary);}
+  .badge.code{background:#EAF7F1;color:#207A57;}
+  .badge.era{background:#F4F3F1;color:#8A8580;}
+  .detail .d-body{font-size:.85rem;line-height:1.7;color:var(--text-secondary);margin-top:10px;}
+  .detail .d-contrib{font-size:.82rem;color:var(--text);margin-top:8px;padding-left:12px;border-left:3px solid var(--primary);}
+  .detail .d-count{font-family:var(--mono);font-size:.64rem;letter-spacing:.12em;text-transform:uppercase;color:var(--primary);margin-bottom:12px;}
+  .detail .d-divider{height:1px;background:var(--border);margin:16px 0;}
+</style>
+</head>
+<body>
+<div class="frame">
+  <div class="tabs">
+    <div class="tab">综述</div><div class="tab">论文</div>
+    <div class="tab active">演进</div><div class="tab">海报</div><div class="tab">引用</div>
+  </div>
+  <div class="main">
+    <div class="card-head">
+      <h2>算法演进谱系</h2>
+      <span class="meta">Algorithm Lineage · Fig.1</span>
+    </div>
+    <div style="font-size:.8rem;color:var(--text-secondary);">大模型推理中 Transformer 注意力机制优化 —— KV Cache 与 Flash Attention</div>
+
+    <div class="toolbar">
+      <span class="lbl">时代分段</span>
+      <div class="toggle" id="eraToggle"><button data-v="on" class="active">Segmented</button><button data-v="off">Linear</button></div>
+    </div>
+
+    <div class="figwrap"><svg id="svg" viewBox="0 0 1460 760"></svg></div>
+    <div class="caption">FIG. 1 — METHOD EVOLUTION TIMELINE · 点击任意节点查看论文详情 ↓</div>
+
+    <div class="detail empty" id="detail">点击图中任一里程碑节点,这里显示该论文的详细信息</div>
+  </div>
+</div>
+
+<script>
+const branches=[
+  {id:"A",name:"KV Cache 压缩与淘汰",mono:"COMPRESSION / EVICTION"},
+  {id:"B",name:"系统 / IO-aware 引擎",mono:"SYSTEM / IO-AWARE"},
+  {id:"C",name:"量化 / 紧凑存储",mono:"QUANTIZATION / STORAGE"},
+];
+const FOUND="__found__";
+const M=[
+  {name:"Transformer",authors:"Vaswani et al",year:2017,branch:FOUND,contrib:"提出自注意力,奠定一切后续",
+    fullTitle:"Attention Is All You Need",venue:"NeurIPS 2017",cite:"130k+",code:true,
+    abs:"提出完全基于注意力的 Transformer 架构,摒弃循环与卷积,成为后续所有大模型的基础。"},
+  {name:"MQA",authors:"Shazeer",year:2019,branch:FOUND,contrib:"多查询注意力,首次压缩 KV",
+    fullTitle:"Fast Transformer Decoding: One Write-Head is All You Need",venue:"arXiv 2019",cite:"600+",code:false,
+    abs:"将多头注意力的 Key/Value 头共享为单一头,大幅降低自回归解码时的显存与带宽开销。"},
+  {name:"FlashAttention",authors:"Dao et al",year:2022,branch:FOUND,contrib:"IO-aware 精确注意力",
+    fullTitle:"FlashAttention: Fast and Memory-Efficient Exact Attention with IO-Awareness",venue:"NeurIPS 2022",cite:"3.5k+",code:true,
+    abs:"通过分块计算与重计算实现 IO-aware 的精确注意力,显著降低 HBM 读写,提速并省显存。"},
+  {name:"GQA",authors:"Ainslie et al",year:2023,branch:FOUND,contrib:"分组查询,平衡质量与开销",
+    fullTitle:"GQA: Training Generalized Multi-Query Transformer Models from Multi-Head Checkpoints",venue:"EMNLP 2023",cite:"900+",code:true,
+    abs:"在 MQA 与 MHA 之间引入分组查询机制,在推理效率与模型质量之间取得平衡。"},
+  {name:"Ada-KV",authors:"Feng et al",year:2024,branch:"A",contrib:"自适应预算的 KV 淘汰",
+    fullTitle:"Ada-KV: Optimizing KV Cache Eviction by Adaptive Budget Allocation",venue:"arXiv 2024",cite:"40+",code:true,
+    abs:"按各注意力头的分布特性自适应分配 KV 保留预算,在固定显存下提升长上下文质量。"},
+  {name:"Self-Attn Drop",authors:"Wang et al",year:2025,branch:"A",contrib:"自注意力信号指导丢弃",
+    fullTitle:"LLMs Know What to Drop: Self-Attention Guided KV Cache Eviction",venue:"arXiv 2025",cite:"10+",code:true,
+    abs:"利用模型自身的自注意力分数判断哪些 KV 条目可安全丢弃,降低长序列推理显存。"},
+  {name:"KeepKV",authors:"Tian et al",year:2025,branch:"A",contrib:"周期性无损压缩",
+    fullTitle:"KeepKV: Achieving Periodic Lossless KV Cache Compression",venue:"arXiv 2025",cite:"5+",code:false,
+    abs:"提出周期性无损的 KV Cache 压缩方案,在不损失精度的前提下压缩缓存体积。"},
+  {name:"ReST-KV",authors:"An et al",year:2026,branch:"A",contrib:"按层输出鲁棒淘汰",
+    fullTitle:"ReST-KV: Robust KV Cache Eviction with Layer-wise Output Stabilization",venue:"arXiv 2026",cite:"0",code:false,
+    abs:"基于逐层输出稳定性的鲁棒 KV 淘汰策略,缓解淘汰带来的输出漂移。"},
+  {name:"FlashInfer",authors:"Ye et al",year:2025,branch:"B",contrib:"可定制高效注意力引擎",
+    fullTitle:"FlashInfer: Efficient and Customizable Attention Engine for LLM Inference Serving",venue:"MLSys 2025",cite:"30+",code:true,
+    abs:"面向推理服务的可定制高效注意力引擎,支持多种 KV 布局与稀疏模式。"},
+  {name:"LMCache",authors:"Liu et al",year:2025,branch:"B",contrib:"企业级 KV Cache 缓存层",
+    fullTitle:"LMCache: An Efficient KV Cache Layer for Enterprise-Scale LLM Inference",venue:"arXiv 2025",cite:"15+",code:true,
+    abs:"企业级 KV Cache 缓存层,跨请求复用前缀 KV,显著降低首字延迟与重复计算。"},
+  {name:"KVOpt Strategies",authors:"Xu et al",year:2026,branch:"B",contrib:"可扩展系统优化策略",
+    fullTitle:"KV Cache Optimization Strategies for Scalable and Efficient LLM Inference",venue:"arXiv 2026",cite:"0",code:false,
+    abs:"系统性综述并整合可扩展的 KV Cache 系统级优化策略,给出工程落地准则。"},
+  {name:"Cross-Layer KV",authors:"Brandon et al",year:2024,branch:"C",contrib:"跨层共享降低体积",
+    fullTitle:"Reducing Transformer Key-Value Cache Size with Cross-Layer Attention",venue:"NeurIPS 2024",cite:"80+",code:true,
+    abs:"通过跨层共享 Key/Value 表示,在层维度上压缩 KV Cache 体积。"},
+  {name:"VecInfer",authors:"Yao et al",year:2025,branch:"C",contrib:"低比特 KV 量化推理",
+    fullTitle:"VecInfer: Efficient LLM Inference with Low-Bit KV Cache via Vector Quantization",venue:"arXiv 2025",cite:"5+",code:true,
+    abs:"用向量量化将 KV Cache 压到低比特,在保持精度的同时减少显存占用。"},
+  {name:"KV Transform Coding",authors:"Staniszewski",year:2025,branch:"C",contrib:"变换编码紧凑存储",
+    fullTitle:"KV Cache Transform Coding for Compact Storage in LLM Inference",venue:"arXiv 2025",cite:"3+",code:false,
+    abs:"借鉴变换编码思想对 KV Cache 做去相关与紧凑存储,降低缓存占用。"},
+];
+const eras=[{name:"基础奠基时代",mono:"FOUNDATIONS",y0:2017,y1:2023},{name:"KV Cache 优化爆发",mono:"KV-CACHE BOOM",y0:2024,y1:2026}];
+
+const INK="#171717",GRAPH="#55514A",GRAPHL="#96918A",SURF="#FFFFFF",WARM="#FAFAF8",PRIMARY="#6D5DF6",PRIMLIGHT="#F0EEFF";
+let showEras=true, selectedKey=null;
+const ns="http://www.w3.org/2000/svg";
+const SANS='Jost,"Noto Sans SC",sans-serif', MONO='"JetBrains Mono",monospace';
+function el(t,a,txt){const e=document.createElementNS(ns,t);for(const k in a)e.setAttribute(k,a[k]);if(txt!=null)e.textContent=txt;return e;}
+
+const W=1460,H=760,PAD={l:92,r:182,t:40,b:64};
+const allYears=M.map(m=>m.year),yMin=Math.min(...allYears),yMax=Math.max(...allYears);
+const FORK=2023.5;
+// Piecewise x-mapping. When segmented, the empty 2019→2022 stretch is compressed
+// into a narrow gap (where the spine is erased + ··· sits), and the dense 2024-2026
+// boom region gets the most room.
+function makeX(gap){const iw=W-PAD.l-PAD.r;
+  if(!gap)return yr=>PAD.l+(yr-yMin)/(yMax-yMin)*iw;
+  const fr={2017:0, 2019:0.12, 2022:0.22, 2023:0.32, 2024:0.45, 2025:0.73, 2026:1.00};
+  const ks=Object.keys(fr).map(Number).sort((a,b)=>a-b);
+  return yr=>{
+    if(fr[yr]!=null)return PAD.l+fr[yr]*iw;
+    for(let i=0;i<ks.length-1;i++){if(yr>=ks[i]&&yr<=ks[i+1]){const t=(yr-ks[i])/(ks[i+1]-ks[i]);return PAD.l+(fr[ks[i]]+t*(fr[ks[i+1]]-fr[ks[i]]))*iw;}}
+    return PAD.l+(yr<ks[0]?0:1)*iw;
+  };}
+const GAP_A=2019, GAP_B=2022;  // the erased empty stretch
+function laneY(bid,base){if(bid===FOUND)return base;const i=branches.findIndex(b=>b.id===bid);return base+(i-(branches.length-1)/2)*180;}
+
+function render(){
+  const svg=document.getElementById("svg");svg.innerHTML="";
+  const xs=makeX(showEras),base=H/2-2;
+  svg.appendChild(el("rect",{x:0,y:0,width:W,height:H,fill:SURF}));
+  if(showEras){const x0=xs(2024)-26,x1=W-PAD.r+20;
+    svg.appendChild(el("rect",{x:x0,y:PAD.t-6,width:x1-x0,height:H-PAD.t-PAD.b+2,fill:WARM}));}
+
+  const fork=xs(FORK);
+  // foundational spine — erased at the 2019→2022 gap when segmented
+  if(showEras){
+    const gc=(xs(GAP_A)+xs(GAP_B))/2, gh=22;
+    svg.appendChild(el("line",{x1:PAD.l,y1:base,x2:gc-gh,y2:base,stroke:INK,"stroke-width":1}));
+    svg.appendChild(el("line",{x1:gc+gh,y1:base,x2:fork,y2:base,stroke:INK,"stroke-width":1}));
+  }else{
+    svg.appendChild(el("line",{x1:PAD.l,y1:base,x2:fork,y2:base,stroke:INK,"stroke-width":1}));
+  }
+  branches.forEach(b=>{const ly=laneY(b.id,base),x1=W-PAD.r;
+    const ee=fork+60;  // elbow end — must stay left of the first branch node (xs(2024))
+    svg.appendChild(el("path",{d:`M${fork},${base} C${fork+30},${base} ${fork+30},${ly} ${ee},${ly}`,fill:"none",stroke:INK,"stroke-width":1}));
+    svg.appendChild(el("line",{x1:ee,y1:ly,x2:x1,y2:ly,stroke:INK,"stroke-width":1}));
+    svg.appendChild(el("path",{d:`M${x1},${ly} l-7,-3.5 M${x1},${ly} l-7,3.5`,stroke:INK,"stroke-width":1,fill:"none"}));
+    svg.appendChild(el("text",{x:x1+10,y:ly-3,"font-family":SANS,"font-weight":500,"font-size":13,fill:INK},b.name));
+    svg.appendChild(el("text",{x:x1+10,y:ly+11,"font-family":MONO,"font-size":8.5,"letter-spacing":"0.08em",fill:GRAPHL},b.mono));
+  });
+  if(showEras){const gx=(xs(GAP_A)+xs(GAP_B))/2;
+    svg.appendChild(el("text",{x:gx,y:base+5,"text-anchor":"middle","font-family":MONO,"font-size":18,fill:GRAPHL},"···"));
+    eras.forEach(e=>{const cx=(xs(e.y0)+xs(e.y1))/2;
+      svg.appendChild(el("text",{x:cx,y:H-30,"text-anchor":"middle","font-family":SANS,"font-weight":500,"font-size":12,fill:GRAPH},e.name));
+      svg.appendChild(el("text",{x:cx,y:H-16,"text-anchor":"middle","font-family":MONO,"font-size":8.5,"letter-spacing":"0.14em",fill:GRAPHL},e.mono));});
+  }
+
+  // Draw one label block (a single paper) at a given side/level off the lane.
+  function drawLabel(m,x,ly,side,level,sel){
+    const nearR=x>W-PAD.r-40, anchor=nearR?"end":"start", tx=nearR?x-7:x+7;
+    const ty=ly+side*(46+level*46);
+    svg.appendChild(el("line",{x1:x,y1:ly,x2:x,y2:ty+(side<0?12:-12),stroke:INK,"stroke-width":0.6,opacity:.45}));
+    const wEst=Math.max(m.name.length*7.2, m.authors.length*6+40, m.contrib.length*10.5)+8;
+    const bx=nearR?tx-wEst:tx-4;
+    svg.appendChild(el("rect",{x:bx,y:ty-12,width:wEst,height:40,rx:5,fill:sel?PRIMLIGHT:SURF,opacity:sel?1:0.92}));
+    svg.appendChild(el("text",{x:tx,y:ty,"text-anchor":anchor,"font-family":SANS,"font-weight":sel?600:400,"font-size":13,fill:sel?PRIMARY:INK},m.name));
+    svg.appendChild(el("text",{x:tx,y:ty+13,"text-anchor":anchor,"font-family":MONO,"font-size":8.5,"letter-spacing":"0.1em",fill:GRAPHL},`${m.authors.toUpperCase()} · ${m.year}`));
+    svg.appendChild(el("text",{x:tx,y:ty+27,"text-anchor":anchor,"font-family":SANS,"font-weight":400,"font-size":10.5,fill:GRAPH},m.contrib));
+  }
+  // One dot per (branch, year) group. Click → show ALL papers in the group.
+  function drawGroup(grp,ly,baseSide){
+    const x=xs(grp[0].m.year), key=grp[0].m.branch+"|"+grp[0].m.year, sel=key===selectedKey;
+    grp.forEach((o,k)=>{
+      let side,level;
+      if(grp.length===1){side=baseSide;level=0;}
+      else{side=k%2===0?-1:1;level=Math.floor(k/2);}   // 2 papers → one above, one below
+      drawLabel(o.m,x,ly,side,level,sel);
+    });
+    svg.appendChild(el("circle",{cx:x,cy:ly,r:sel?6:4,fill:sel?PRIMARY:INK,stroke:sel?"#fff":SURF,"stroke-width":2}));
+    const hit=el("circle",{cx:x,cy:ly,r:16,fill:"transparent",style:"cursor:pointer"});
+    hit.addEventListener("click",()=>{
+      if(selectedKey===key){selectedKey=null;render();clearDetail();}      // click again → deselect
+      else{selectedKey=key;render();showDetail(grp.map(o=>o.m));}
+    });
+    svg.appendChild(hit);
+  }
+  // Group a lane's papers by year; one clickable node per year.
+  function renderLane(members,ly){
+    const byYear={};
+    members.forEach(o=>{(byYear[o.m.year]=byYear[o.m.year]||[]).push(o);});
+    Object.keys(byYear).map(Number).sort((a,b)=>a-b)
+      .forEach((yr,gIdx)=>drawGroup(byYear[yr],ly,gIdx%2===0?-1:1));
+  }
+  renderLane(M.map((m,i)=>({m,i})).filter(o=>o.m.branch===FOUND),base);
+  branches.forEach(b=>renderLane(M.map((m,i)=>({m,i})).filter(o=>o.m.branch===b.id),laneY(b.id,base)));
+}
+
+function clearDetail(){
+  const d=document.getElementById("detail");
+  d.className="detail empty";
+  d.textContent="点击图中任一里程碑节点,这里显示该论文的详细信息";
+}
+function showDetail(papers){
+  const d=document.getElementById("detail");
+  d.classList.remove("empty");
+  const block=m=>{
+    const bname = m.branch===FOUND?"奠基 Foundational":branches.find(b=>b.id===m.branch).name;
+    const era = m.year<=2023?"基础奠基时代":"KV Cache 优化爆发";
+    return `<div class="d-paper">
+      <div class="d-top">
+        <div>
+          <div class="d-title">${m.fullTitle}</div>
+          <div class="d-sub">${m.authors} · ${m.venue} · ${bname}</div>
+        </div>
+        <div class="d-badges">
+          <span class="badge cite">引用 ${m.cite}</span>
+          ${m.code?'<span class="badge code">有代码</span>':''}
+          <span class="badge era">${era}</span>
+        </div>
+      </div>
+      <div class="d-contrib">关键贡献:${m.contrib}</div>
+      <div class="d-body">${m.abs}</div>
+    </div>`;
+  };
+  const header = papers.length>1 ? `<div class="d-count">◧ 该节点 (${papers[0].branch===FOUND?'奠基':branches.find(b=>b.id===papers[0].branch).name} · ${papers[0].year}) 含 ${papers.length} 篇同期论文</div>` : '';
+  d.innerHTML = header + papers.map(block).join('<div class="d-divider"></div>');
+}
+
+document.getElementById("eraToggle").addEventListener("click",e=>{if(e.target.tagName!=="BUTTON")return;showEras=e.target.dataset.v==="on";document.querySelectorAll("#eraToggle button").forEach(b=>b.classList.toggle("active",b===e.target));render();});
+if(document.fonts&&document.fonts.ready){document.fonts.ready.then(render);}
+render();
+</script>
+</body>
+</html>

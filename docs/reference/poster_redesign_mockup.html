@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Poster Mockup v3 — GUI-embedded · 图文并茂</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Jost:wght@200;300;400;500&family=Lora:ital,wght@0,400;0,500;1,400&family=JetBrains+Mono:wght@400;500&family=Noto+Sans+SC:wght@300;400;500;700&family=Noto+Serif+SC:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    /* DESIGN.md tokens (GUI system) */
+    --primary:#6D5DF6;--primary-hover:#5B4BE0;--primary-light:#F0EEFF;
+    --bg:#F6F5F3;--bg-alt:#FAFAF8;--surface:#FFFFFF;--surface-hover:#F7F6F4;
+    --border:#E7E3DC;--border-light:#F2EFEA;
+    --text:#171717;--text-secondary:#55514A;--text-muted:#96918A;
+    --success:#2F9E71;
+    --radius:10px;--radius-lg:12px;--radius-xl:14px;
+    --shadow-md:0 4px 6px -1px rgb(0 0 0/.07),0 2px 4px -2px rgb(0 0 0/.05);
+    --shadow-lg:0 10px 15px -3px rgb(0 0 0/.08),0 4px 6px -4px rgb(0 0 0/.05);
+    --font:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei","Noto Sans SC",sans-serif;
+    /* editorial fonts (content treatment) */
+    --serif:"Lora","Noto Serif SC",Georgia,serif;
+    --mono:"JetBrains Mono",monospace;
+    --jost:"Jost","Noto Sans SC",sans-serif;
+    --band:#F4F2FC; /* faint purple era tint, GUI-native */
+  }
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{background:var(--bg);color:var(--text);font-family:var(--font);padding:42px 0;
+    background-image:radial-gradient(1200px 460px at 82% -4%,rgba(109,93,246,.06),transparent);}
+
+  /* poster = white surface card sitting inside the GUI */
+  .poster{width:1180px;margin:0 auto;background:var(--surface);
+    border:1px solid var(--border);border-radius:var(--radius-xl);
+    padding:40px 56px 26px;box-shadow:var(--shadow-lg);}
+
+  .rule-full{height:1px;background:var(--border);width:100%;}
+  .rule36{width:38px;height:2px;background:var(--primary);margin:13px 0 4px;border-radius:2px;}
+
+  .chrome{display:flex;justify-content:space-between;align-items:center;
+    font-family:var(--mono);font-size:10.5px;letter-spacing:.16em;
+    text-transform:uppercase;color:var(--text-muted);padding-bottom:9px;}
+  .chrome.foot{padding:10px 0 0;margin-top:20px;border-top:1px solid var(--border);}
+
+  .kicker{font-family:var(--mono);font-size:11px;letter-spacing:.2em;
+    text-transform:uppercase;color:var(--primary);margin:16px 0 11px;}
+  .title{font-family:var(--jost);font-weight:300;font-size:37px;
+    line-height:1.2;letter-spacing:-.01em;color:var(--text);}
+  .title .zh{font-weight:500;}
+
+  /* stat band */
+  .stats{display:flex;gap:0;margin:20px 0 4px;}
+  .stat{flex:1;border-top:2px solid var(--text);padding:9px 16px 2px 0;}
+  .stat:first-child{border-top-color:var(--primary);}
+  .stat .num{font-family:var(--jost);font-weight:200;font-size:46px;line-height:1;
+    letter-spacing:-.03em;color:var(--text);}
+  .stat .num .u{font-size:23px;}
+  .stat .lab{font-family:var(--jost);font-weight:500;font-size:13.5px;color:var(--text);margin-top:8px;}
+  .stat .sub{font-family:var(--mono);font-size:8.5px;letter-spacing:.12em;
+    text-transform:uppercase;color:var(--text-muted);margin-top:2px;}
+
+  /* hero figure in a GUI card */
+  .figwrap{margin-top:20px;border:1px solid var(--border-light);border-radius:var(--radius-lg);
+    background:var(--surface);overflow:hidden;padding:6px 6px 0;}
+  .figwrap svg{width:100%;height:auto;display:block;}
+  .caption{font-family:var(--mono);font-size:9.5px;letter-spacing:.16em;text-transform:uppercase;
+    color:var(--text-muted);text-align:center;padding:8px 0 9px;}
+
+  /* serif highlight (pulled from review conclusion) */
+  .highlight{font-family:var(--serif);font-weight:400;font-size:22px;line-height:1.5;
+    color:var(--text);margin:24px 0 6px;padding-left:18px;border-left:3px solid var(--primary);}
+
+  /* 图文穿插 bands */
+  .band{display:flex;gap:46px;margin-top:24px;align-items:flex-start;}
+  .band.alt{border-top:1px solid var(--border);padding-top:22px;}
+  .col-text{flex:1.32;}
+  .col-viz{flex:1;}
+  .sec-h{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:12px;}
+  .sec-h .zh{font-family:var(--jost);font-weight:500;font-size:16px;color:var(--text);}
+  .sec-h .en{font-family:var(--mono);font-size:8.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--text-muted);}
+
+  /* review prose excerpt (the 图文 text — GUI body style, purple left rule) */
+  .excerpt{font-family:var(--font);font-size:14px;line-height:1.92;color:var(--text-secondary);
+    padding-left:16px;border-left:3px solid var(--primary-light);text-align:justify;}
+  .excerpt .em{color:var(--text);font-weight:600;}
+  .excerpt + .excerpt{margin-top:13px;}
+  .src{font-family:var(--mono);font-size:8px;letter-spacing:.1em;text-transform:uppercase;
+    color:var(--text-muted);margin-top:9px;}
+
+  /* taxonomy bars */
+  .bar{margin-bottom:13px;}
+  .bar .top{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:5px;}
+  .bar .nm{font-family:var(--jost);font-weight:400;font-size:13.5px;color:var(--text);}
+  .bar .ct{font-family:var(--jost);font-weight:200;font-size:21px;letter-spacing:-.02em;color:var(--text);}
+  .bar .track{height:8px;background:var(--bg-alt);border:1px solid var(--border);border-radius:3px;position:relative;overflow:hidden;}
+  .bar .fill{position:absolute;left:0;top:0;bottom:0;background:var(--text);}
+  .bar:first-of-type .fill{background:var(--primary);}
+
+  /* trade-off matrix */
+  .mtx{width:100%;border-collapse:collapse;}
+  .mtx th,.mtx td{border:1px solid var(--border);padding:8px 8px;text-align:center;}
+  .mtx th{font-family:var(--mono);font-size:8px;letter-spacing:.08em;text-transform:uppercase;
+    color:var(--text-muted);font-weight:400;background:var(--bg-alt);}
+  .mtx td.rowh{text-align:left;font-family:var(--jost);font-weight:400;font-size:12px;color:var(--text);white-space:nowrap;}
+  .mtx td .mk{font-size:13px;color:var(--primary);line-height:1;}
+  .legend{font-family:var(--mono);font-size:8px;letter-spacing:.1em;text-transform:uppercase;
+    color:var(--text-muted);margin-top:9px;}
+</style>
+</head>
+<body>
+<div class="poster">
+
+  <div class="chrome">
+    <span>ReviewMaker · 文献综述海报</span>
+    <span>AUTO-GENERATED · 2026·06·21</span>
+  </div>
+  <div class="rule-full"></div>
+
+  <div class="kicker">Algorithm Lineage · 算法演进谱系</div>
+  <div class="title"><span class="zh">大模型推理中</span> Transformer <span class="zh">注意力机制优化</span><br>—— KV Cache <span class="zh">与</span> Flash Attention <span class="zh">视角</span></div>
+  <div class="rule36"></div>
+
+  <div class="stats">
+    <div class="stat"><div class="num">15</div><div class="lab">综述论文</div><div class="sub">Papers Reviewed</div></div>
+    <div class="stat"><div class="num">80<span class="u">%</span></div><div class="lab">开源代码</div><div class="sub">12 / 15 · Code</div></div>
+    <div class="stat"><div class="num">3</div><div class="lab">技术谱系</div><div class="sub">Lineages</div></div>
+    <div class="stat"><div class="num">9</div><div class="lab">跨越年份</div><div class="sub">2017 – 2026</div></div>
+  </div>
+
+  <div class="figwrap">
+    <svg id="svg" viewBox="0 0 1480 740"></svg>
+    <div class="caption">Fig. 1 — Method Evolution Timeline · 14 Milestones · 4 Foundational · 3 Lineages</div>
+  </div>
+
+  <div class="highlight">“KV Cache 优化正从早期的单点量化加速，走向精细化驱逐、系统协同与异构计算的多元体系。”</div>
+
+  <div class="band">
+    <div class="col-text">
+      <div class="sec-h"><span class="zh">研究背景与问题定义</span><span class="en">Background · 摘要节选</span></div>
+      <div class="excerpt">随着以 Transformer 架构为代表的大语言模型在自然语言处理领域取得突破性进展，其推理效率与可扩展性正面临严峻挑战。自回归生成过程中，模型需重复计算历史词元的注意力，导致计算冗余与延迟剧增。<span class="em">键值缓存（KV Cache）技术应运而生</span>，将先前词元的 Key/Value 缓存复用，显著减少浮点运算；然而其内存占用随序列长度线性增长，成为 GPU 显存与推理吞吐的关键瓶颈。</div>
+      <div class="src">— 节选自综述「一、研究背景与问题定义」</div>
+    </div>
+    <div class="col-viz">
+      <div class="sec-h"><span class="zh">方法体系分类</span><span class="en">Taxonomy · 3 Lineages</span></div>
+      <div class="bar"><div class="top"><span class="nm">KV Cache 压缩与淘汰</span><span class="ct">4</span></div><div class="track"><div class="fill" style="width:100%"></div></div></div>
+      <div class="bar"><div class="top"><span class="nm">系统 / IO-aware 引擎</span><span class="ct">3</span></div><div class="track"><div class="fill" style="width:75%"></div></div></div>
+      <div class="bar"><div class="top"><span class="nm">量化 / 紧凑存储</span><span class="ct">3</span></div><div class="track"><div class="fill" style="width:75%"></div></div></div>
+      <div class="bar"><div class="top"><span class="nm">奠基性工作 Foundational</span><span class="ct">4</span></div><div class="track"><div class="fill" style="width:100%"></div></div></div>
+    </div>
+  </div>
+
+  <div class="band alt">
+    <div class="col-viz">
+      <div class="sec-h"><span class="zh">横向对比</span><span class="en">Trade-offs</span></div>
+      <table class="mtx">
+        <tr><th>类别 / Lineage</th><th>性能·效率</th><th>可复现</th><th>适用场景</th></tr>
+        <tr><td class="rowh">压缩与淘汰</td><td><span class="mk">◐</span></td><td><span class="mk">●</span></td><td><span class="mk">长上下文</span></td></tr>
+        <tr><td class="rowh">系统 / 异构</td><td><span class="mk">●</span></td><td><span class="mk">◐</span></td><td><span class="mk">服务器集群</span></td></tr>
+        <tr><td class="rowh">量化 / 存储</td><td><span class="mk">●</span></td><td><span class="mk">●</span></td><td><span class="mk">边缘部署</span></td></tr>
+      </table>
+      <div class="legend">● High&nbsp;&nbsp;◐ Medium&nbsp;&nbsp;— 适用场景由综述横向对比节归纳</div>
+    </div>
+    <div class="col-text">
+      <div class="sec-h"><span class="zh">核心结论与趋势</span><span class="en">Key Findings · 结论节选</span></div>
+      <div class="excerpt">本综述系统梳理了 KV Cache 与 Flash Attention 视角下的关键技术。研究发现，该领域已从早期的单点量化加速，演进到如今<span class="em">精细化的驱逐策略、系统协同优化与异构计算</span>等多元化技术体系。当前研究普遍缺乏标准化的量化对比，限制了不同方法间的公平比较；未来的突破将更依赖多种优化技术的深度融合、对任务动态特性的在线感知，以及对极长上下文场景的整体系统设计。</div>
+      <div class="src">— 节选自综述「九、结论」</div>
+    </div>
+  </div>
+
+  <div class="chrome foot">
+    <span>文献综述 Agent · 基于 DeepSeek 大模型自动生成</span>
+    <span>Fig.1 Lineage · OpenAlex 引用骨架</span>
+  </div>
+
+</div>
+
+<script>
+const branches=[
+  {id:"A",name:"KV Cache 压缩与淘汰",mono:"COMPRESSION / EVICTION"},
+  {id:"B",name:"系统 / IO-aware 引擎",mono:"SYSTEM / IO-AWARE"},
+  {id:"C",name:"量化 / 紧凑存储",mono:"QUANTIZATION / STORAGE"},
+];
+const FOUND="__found__";
+const M=[
+  {name:"Transformer",authors:"Vaswani et al",year:2017,branch:FOUND,contrib:"提出自注意力,奠定一切后续"},
+  {name:"MQA",authors:"Shazeer",year:2019,branch:FOUND,contrib:"多查询注意力,首次压缩 KV"},
+  {name:"FlashAttention",authors:"Dao et al",year:2022,branch:FOUND,contrib:"IO-aware 精确注意力"},
+  {name:"GQA",authors:"Ainslie et al",year:2023,branch:FOUND,contrib:"分组查询,平衡质量与开销"},
+  {name:"Ada-KV",authors:"Feng et al",year:2024,branch:"A",contrib:"自适应预算的 KV 淘汰"},
+  {name:"Self-Attn Drop",authors:"Wang et al",year:2025,branch:"A",contrib:"自注意力信号指导丢弃"},
+  {name:"KeepKV",authors:"Tian et al",year:2025,branch:"A",contrib:"周期性无损压缩"},
+  {name:"ReST-KV",authors:"An et al",year:2026,branch:"A",contrib:"按层输出鲁棒淘汰"},
+  {name:"FlashInfer",authors:"Ye et al",year:2025,branch:"B",contrib:"可定制高效注意力引擎"},
+  {name:"LMCache",authors:"Liu et al",year:2025,branch:"B",contrib:"企业级 KV Cache 缓存层"},
+  {name:"KVOpt Strategies",authors:"Xu et al",year:2026,branch:"B",contrib:"可扩展系统优化策略"},
+  {name:"Cross-Layer KV",authors:"Brandon et al",year:2024,branch:"C",contrib:"跨层共享降低体积"},
+  {name:"VecInfer",authors:"Yao et al",year:2025,branch:"C",contrib:"低比特 KV 量化推理"},
+  {name:"KV Transform Coding",authors:"Staniszewski",year:2025,branch:"C",contrib:"变换编码紧凑存储"},
+];
+const eras=[{name:"基础奠基时代",mono:"FOUNDATIONS",y0:2017,y1:2023},{name:"KV Cache 优化爆发",mono:"KV-CACHE BOOM",y0:2024,y1:2026}];
+const INK="#171717",GRAPH="#55514A",GRAPHL="#96918A",SURF="#FFFFFF",BAND="#F4F2FC",PRIM="#6D5DF6";
+const ns="http://www.w3.org/2000/svg";
+const SANS='Jost, "Noto Sans SC", sans-serif', MONO='"JetBrains Mono", monospace';
+function el(t,a,txt){const e=document.createElementNS(ns,t);for(const k in a)e.setAttribute(k,a[k]);if(txt!=null)e.textContent=txt;return e;}
+const W=1480,H=740,PAD={l:90,r:196,t:46,b:56};
+const allYears=M.map(m=>m.year),yMin=Math.min(...allYears),yMax=Math.max(...allYears);
+const FORK=2023.5;
+function makeX(){const innerW=W-PAD.l-PAD.r;
+  const lW=innerW*0.32,gW=innerW*0.08,rW=innerW*0.60;
+  return yr=> yr<=2023 ? PAD.l+(yr-2017)/(2023-2017)*lW : PAD.l+lW+gW+(yr-2024)/(2026-2024)*rW;}
+function laneY(bid,base){ if(bid===FOUND)return base; const i=branches.findIndex(b=>b.id===bid); return base+(i-(branches.length-1)/2)*190; }
+function render(){
+  const svg=document.getElementById("svg"); svg.innerHTML="";
+  const xs=makeX(), base=H/2-2;
+  svg.appendChild(el("rect",{x:0,y:0,width:W,height:H,fill:SURF}));
+  const x0=xs(2024)-28, x1=W-PAD.r+24;
+  svg.appendChild(el("rect",{x:x0,y:PAD.t-12,width:x1-x0,height:H-PAD.t-PAD.b+8,fill:BAND}));
+  svg.appendChild(el("line",{x1:x0,y1:PAD.t-12,x2:x0,y2:H-PAD.b-4,stroke:PRIM,"stroke-width":1,opacity:.4}));
+  const fork=xs(FORK);
+  svg.appendChild(el("line",{x1:PAD.l,y1:base,x2:fork,y2:base,stroke:INK,"stroke-width":1}));
+  branches.forEach(b=>{const ly=laneY(b.id,base),xe=W-PAD.r;
+    svg.appendChild(el("path",{d:`M${fork},${base} C${fork+36},${base} ${fork+36},${ly} ${fork+72},${ly}`,fill:"none",stroke:INK,"stroke-width":1}));
+    svg.appendChild(el("line",{x1:fork+72,y1:ly,x2:xe,y2:ly,stroke:INK,"stroke-width":1}));
+    svg.appendChild(el("path",{d:`M${xe},${ly} l-8,-4 M${xe},${ly} l-8,4`,stroke:INK,"stroke-width":1,fill:"none"}));
+    svg.appendChild(el("text",{x:xe+11,y:ly-4,"font-family":SANS,"font-weight":500,"font-size":16,fill:INK},b.name));
+    svg.appendChild(el("text",{x:xe+11,y:ly+12,"font-family":MONO,"font-size":10,"letter-spacing":"0.08em",fill:GRAPHL},b.mono));});
+  const gx=(xs(2023)+xs(2024))/2;
+  svg.appendChild(el("text",{x:gx,y:base+6,"text-anchor":"middle","font-family":MONO,"font-size":22,fill:GRAPHL},"···"));
+  eras.forEach((e)=>{const cx=(xs(e.y0)+xs(e.y1))/2;
+    svg.appendChild(el("text",{x:cx,y:H-24,"text-anchor":"middle","font-family":SANS,"font-weight":500,"font-size":15,fill:GRAPH},e.name));
+    svg.appendChild(el("text",{x:cx,y:H-9,"text-anchor":"middle","font-family":MONO,"font-size":10,"letter-spacing":"0.16em",fill:GRAPHL},e.mono));});
+  function node(m,ly,side){const x=xs(m.year);const nearR=x>W-PAD.r-40;
+    svg.appendChild(el("circle",{cx:x,cy:ly,r:5,fill:m.year>=2024?PRIM:INK,stroke:m.year>=2024?BAND:SURF,"stroke-width":2}));
+    const ty=ly+side*54;
+    svg.appendChild(el("line",{x1:x,y1:ly,x2:x,y2:ty+(side<0?12:-12),stroke:INK,"stroke-width":0.7,opacity:.5}));
+    const anchor=nearR?"end":"start", tx=nearR?x-9:x+9;
+    svg.appendChild(el("text",{x:tx,y:ty,"text-anchor":anchor,"font-family":SANS,"font-weight":400,"font-size":17,fill:INK},m.name));
+    svg.appendChild(el("text",{x:tx,y:ty+16,"text-anchor":anchor,"font-family":MONO,"font-size":10.5,"letter-spacing":"0.1em",fill:GRAPHL},`${m.authors.toUpperCase()} · ${m.year}`));
+    svg.appendChild(el("text",{x:tx,y:ty+33,"text-anchor":anchor,"font-family":SANS,"font-weight":400,"font-size":13.5,fill:GRAPH},m.contrib));}
+  M.filter(m=>m.branch===FOUND).forEach((m,i)=>node(m,base,i%2===0?-1:1));
+  branches.forEach(b=>{const list=M.filter(m=>m.branch===b.id).sort((p,q)=>p.year-q.year);
+    let lastY=null,lastS=-1;
+    list.forEach((m,i)=>{let s=i%2===0?1:-1; if(m.year===lastY)s=-lastS; node(m,laneY(b.id,base),s); lastY=m.year;lastS=s;});});
+}
+if(document.fonts&&document.fonts.ready){document.fonts.ready.then(render);}
+render();
+</script>
+</body>
+</html>
