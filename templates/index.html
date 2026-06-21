@@ -322,6 +322,10 @@ a:hover { text-decoration: underline; }
   font-size: 0.7rem;
   color: var(--text-muted);
   transition: border-color var(--transition-slow);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
 }
 .sidebar-footer .status-dot {
   display: inline-block;
@@ -331,6 +335,28 @@ a:hover { text-decoration: underline; }
 }
 .sidebar-footer .status-dot.on { background: var(--success); }
 .sidebar-footer .status-dot.off { background: var(--error); }
+.btn-load {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 12px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all var(--transition);
+  font-family: var(--font);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.btn-load:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+  background: var(--primary-light);
+}
 
 /* ============================================================
    MAIN AREA
@@ -905,6 +931,139 @@ a:hover { text-decoration: underline; }
 .toast-info { background: var(--primary); }
 @keyframes slideIn { from { opacity: 0; transform: translateX(100%); } to { opacity: 1; transform: translateX(0); } }
 @keyframes slideOut { from { opacity: 1; transform: translateX(0); } to { opacity: 0; transform: translateX(100%); } }
+
+/* ============================================================
+   LOAD PROJECT MODAL
+   ============================================================ */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.35);
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: fadeIn 0.2s ease;
+}
+.modal-card {
+  background: var(--surface);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-lg);
+  width: min(520px, 90vw);
+  max-height: 70vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.modal-header {
+  padding: 18px 22px 14px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.modal-header h3 {
+  font-size: 1rem;
+  color: var(--text);
+  margin: 0;
+}
+.modal-close {
+  background: none;
+  border: none;
+  font-size: 1.2rem;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 6px;
+  transition: all var(--transition);
+  font-family: var(--font);
+  line-height: 1;
+}
+.modal-close:hover { background: var(--bg); color: var(--text); }
+.modal-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px 16px;
+}
+.modal-empty {
+  text-align: center;
+  padding: 40px 20px;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+.project-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border-light);
+  margin-bottom: 8px;
+  cursor: pointer;
+  transition: all var(--transition);
+  background: var(--bg-alt);
+}
+.project-item:hover {
+  border-color: var(--primary);
+  box-shadow: var(--shadow-sm);
+  background: var(--surface);
+}
+.project-item .proj-info { min-width: 0; flex: 1; }
+.project-item .proj-topic {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.project-item .proj-meta {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  margin-top: 3px;
+}
+.project-item .proj-arrow {
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  flex-shrink: 0;
+  transition: color var(--transition);
+}
+.project-item:hover .proj-arrow { color: var(--primary); }
+
+.folder-pick-divider {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin: 16px 0;
+  color: var(--text-muted);
+  font-size: 0.75rem;
+}
+.folder-pick-divider::before,
+.folder-pick-divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+.btn-folder-pick {
+  width: 100%;
+  padding: 11px;
+  border: 1.5px dashed var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-alt);
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition);
+  font-family: var(--font);
+}
+.btn-folder-pick:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+  background: var(--primary-light);
+}
 
 /* ============================================================
    RESPONSIVE
@@ -1508,8 +1667,8 @@ body {
   </div>
 
   <div class="sidebar-footer">
-    <span class="status-dot on" id="api-status-dot"></span>
-    <span id="api-status-text">API 已配置</span>
+    <span><span class="status-dot on" id="api-status-dot"></span><span id="api-status-text">API 已配置</span></span>
+    <button class="btn-load" id="btn-load" onclick="showLoadModal()" disabled>📂 加载项目</button>
   </div>
 </aside>
 
@@ -1595,7 +1754,7 @@ body {
     </div>
     <div class="tab-content" id="tab-poster">
       <div class="img-panel">
-        <img id="img-poster" src="" alt="学术海报" style="display:none; width:100%; height:auto;">
+        <iframe id="iframe-poster" src="" style="display:none; width:100%; height:80vh; border:none; border-radius:14px; box-shadow:0 10px 35px rgba(30,28,25,0.04);"></iframe>
         <div class="caption">综合学术海报</div>
       </div>
     </div>
@@ -1959,7 +2118,7 @@ async function fetchApiConfig() {
     }
   } catch(e) { /* ignore */ }
 }
-fetchApiConfig();
+fetchApiConfig().finally(() => { document.getElementById('btn-load').disabled = false; });
 
 async function startJob() {
   const topic = document.getElementById('input-topic').value.trim();
@@ -2083,10 +2242,10 @@ function renderResults(result) {
   const downloadBar = document.getElementById('download-bar-review');
   if (result.files) {
     let dlHtml = '';
-    if (result.files.review) dlHtml += `<a class="btn-download" href="${result.files.review}" download>下载综述 (.md)</a>`;
-    if (result.files.bib) dlHtml += `<a class="btn-download" href="${result.files.bib}" download>下载 BibTeX (.bib)</a>`;
-    if (result.files.evolution) dlHtml += `<a class="btn-download" href="${result.files.evolution}" download>下载演进图 (.svg)</a>`;
-    if (result.files.poster_png) dlHtml += `<a class="btn-download" href="${result.files.poster_png}" download>下载海报 (.png)</a>`;
+    if (result.files.review) dlHtml += `<a class="btn-download" href="${result.files.review}" download="review.md">下载综述 (.md)</a>`;
+    if (result.files.bib) dlHtml += `<a class="btn-download" href="${result.files.bib}" download="references.bib">下载 BibTeX (.bib)</a>`;
+    if (result.files.evolution) dlHtml += `<a class="btn-download" href="${result.files.evolution}" download="evolution.svg">下载演进图 (.svg)</a>`;
+    if (result.files.poster) dlHtml += `<a class="btn-download" href="${result.files.poster}" download="poster.html">下载海报 (.html)</a>`;
     downloadBar.innerHTML = dlHtml;
     downloadBar.style.display = 'flex';
   }
@@ -2107,15 +2266,15 @@ function renderResults(result) {
     renderEvolutionFigure(result.files.evolution, result.files.evolution_nodes);
   }
 
-  // Poster tab — show the rendered PNG fit-to-width (vertical scroll only)
-  if (result.files && (result.files.poster_png || result.files.poster)) {
-    const img = document.getElementById('img-poster');
-    img.src = (result.files.poster_png || result.files.poster) + '?t=' + Date.now();
-    img.style.display = '';
+  // Poster tab — show the HTML poster in an iframe
+  if (result.files && result.files.poster) {
+    const iframe = document.getElementById('iframe-poster');
+    iframe.src = _cacheUrl(result.files.poster);
+    iframe.style.display = '';
   }
 
   // References tab
-  if (result.papers) {
+  if (result.papers && result.papers.length > 0) {
     let refHtml = '';
     result.papers.forEach(p => {
       refHtml += `<p><strong>[${p.index}]</strong> ${p.first_author} (${p.year}). <em>${p.title}</em>.`;
@@ -2125,6 +2284,9 @@ function renderResults(result) {
       refHtml += '</p>';
     });
     document.getElementById('refs-preview').innerHTML = refHtml;
+  } else {
+    document.getElementById('refs-preview').innerHTML =
+      '<p style="color:var(--text-muted);">暂无参考文献数据（项目缺少论文元数据）</p>';
   }
 
   // Scroll to top of content
@@ -2308,8 +2470,8 @@ function clearResults() {
   document.getElementById('paper-search-bar').style.display = 'none';
   document.getElementById('evo-figure').innerHTML = '';
   clearEvoDetail();
-  document.getElementById('img-poster').src = '';
-  document.getElementById('img-poster').style.display = 'none';
+  document.getElementById('iframe-poster').src = '';
+  document.getElementById('iframe-poster').style.display = 'none';
   document.getElementById('refs-preview').innerHTML = '';
   document.getElementById('download-bar-review').innerHTML = '';
   document.getElementById('download-bar-review').style.display = 'none';
@@ -2398,17 +2560,23 @@ function _evoHighlight(svg, key) {
   });
 }
 
+function _cacheUrl(url) {
+  // Blob URLs don't need (and may break on) cache-busting query strings.
+  if (!url || url.startsWith('blob:')) return url;
+  return url + '?t=' + Date.now();
+}
+
 async function renderEvolutionFigure(svgUrl, nodesUrl) {
   const fig = document.getElementById('evo-figure');
   if (!fig) return;
   clearEvoDetail();
   try {
-    const svgText = await (await fetch(svgUrl + '?t=' + Date.now())).text();
+    const svgText = await (await fetch(_cacheUrl(svgUrl))).text();
     fig.innerHTML = svgText;
     const svg = fig.querySelector('svg');
     if (svg) { svg.removeAttribute('width'); svg.removeAttribute('height'); svg.style.width = '100%'; svg.style.height = 'auto'; }
     if (!nodesUrl || !svg) return;
-    const nodes = await (await fetch(nodesUrl + '?t=' + Date.now())).json();
+    const nodes = await (await fetch(_cacheUrl(nodesUrl))).json();
     const byKey = {};
     nodes.forEach(n => { byKey[n.branch + '|' + n.year] = n.members; });
     svg.querySelectorAll('.fig-hit').forEach(hit => {
@@ -2423,7 +2591,277 @@ async function renderEvolutionFigure(svgUrl, nodesUrl) {
     console.error('renderEvolutionFigure', err);
   }
 }
+
+// ============================================================
+// LOAD PROJECT
+// ============================================================
+async function showLoadModal() {
+  const modal = document.getElementById('load-modal');
+  const list = document.getElementById('modal-project-list');
+  modal.style.display = 'flex';
+  list.innerHTML = '<div class="modal-empty">加载中...</div>';
+
+  try {
+    const res = await fetch('/api/projects');
+    const projects = await res.json();
+    if (!projects.length) {
+      list.innerHTML = '<div class="modal-empty">暂无历史项目<br><small>运行一次综述生成后，项目将出现在这里</small></div>';
+      return;
+    }
+    list.innerHTML = projects.map(p => `
+      <div class="project-item" onclick="loadProject('${p.job_id}')">
+        <div class="proj-info">
+          <div class="proj-topic">${escapeHtml(p.topic)}</div>
+          <div class="proj-meta">${p.paper_count} 篇论文 · ${fmtDate(p.created_at)}</div>
+        </div>
+        <span class="proj-arrow">▶</span>
+      </div>
+    `).join('');
+  } catch(e) {
+    list.innerHTML = `<div class="modal-empty">加载失败：${escapeHtml(e.message)}</div>`;
+  }
+}
+
+function hideLoadModal() {
+  document.getElementById('load-modal').style.display = 'none';
+}
+
+async function loadProject(jobId) {
+  hideLoadModal();
+  // Reset and show results view
+  if (pollTimer) clearInterval(pollTimer);
+  currentJobId = jobId;
+  document.getElementById('pulse-dot').classList.remove('active');
+  document.getElementById('pipeline-steps').classList.remove('visible');
+  document.getElementById('status-text').textContent = '正在加载项目...';
+  document.getElementById('status-progress').textContent = '—';
+  document.getElementById('progress-bar').style.width = '0%';
+  document.getElementById('btn-start').disabled = false;
+  document.getElementById('btn-start').textContent = '发送修改';
+  document.getElementById('input-request').placeholder = '继续输入修改意见，例如：请更侧重比较不同论文模型结构的差异，弱化背景介绍。';
+  document.getElementById('btn-clear').disabled = false;
+
+  try {
+    const res = await fetch('/api/load', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ job_id: jobId }),
+    });
+    const data = await res.json();
+    if (data.error) {
+      showToast(data.error, 'error');
+      document.getElementById('status-text').textContent = '加载失败: ' + data.error;
+      return;
+    }
+    jobResult = data.result;
+    allPapers = data.result?.papers || [];
+    showResults();
+    renderResults(data.result);
+    document.getElementById('status-text').textContent = '已加载历史项目';
+    showToast('项目已加载', 'success');
+  } catch(e) {
+    showToast('加载失败: ' + e.message, 'error');
+    document.getElementById('status-text').textContent = '加载失败: ' + e.message;
+  }
+}
+
+function parseBibtexToPapers(bibText) {
+  // Parse simple BibTeX entries into minimal paper objects for the UI.
+  const papers = [];
+  const entryRe = /@(\w+)\{([^,]*),\s*([\s\S]*?)\n\}/g;
+  let match;
+  let index = 0;
+  while ((match = entryRe.exec(bibText)) !== null) {
+    index++;
+    const body = match[3];
+    const title = _bibField(body, 'title');
+    const author = _bibField(body, 'author');
+    const year = parseInt(_bibField(body, 'year')) || 0;
+    const firstAuthor = author
+      ? author.replace(/[{}]/g, '').split(/\s+and\s+/)[0].split(',').shift().trim()
+      : 'Unknown';
+    const venue = _bibField(body, 'journal') || _bibField(body, 'booktitle') || '';
+    const arxivId = _bibField(body, 'archiveprefix') === 'arXiv' ? _bibField(body, 'eprint') : '';
+    papers.push({
+      index: index,
+      title: title || 'Unknown Title',
+      first_author: firstAuthor,
+      year: year,
+      venue: venue,
+      citations: 0,
+      arxiv_url: arxivId ? `https://arxiv.org/abs/${arxivId}` : null,
+      pdf_url: null,
+      has_code: false,
+      code_urls: [],
+      method_category: '未分类',
+      key_innovation: '',
+      datasets_used: [],
+      key_results: '',
+      evidence_source: '',
+      detail_confidence: 0,
+    });
+  }
+  return papers;
+}
+function _bibField(body, name) {
+  const re = new RegExp(`${name}\\s*=\\s*[{"]([^}"]+)[}"]`, 'i');
+  const m = body.match(re);
+  return m ? m[1].trim() : '';
+}
+
+async function handleFolderPick(event) {
+  const files = event.target.files;
+  if (!files.length) return;
+
+  // Build filename → File map (ignore directory entries)
+  const byName = {};
+  for (const f of files) {
+    const name = f.name; // basename only
+    if (name && !f.name.endsWith('/')) byName[name] = f;
+  }
+
+  // Check for essential files
+  if (!byName['review.md'] && !byName['meta.json']) {
+    showToast('所选文件夹缺少 review.md 或 meta.json，请确认选择了正确的项目目录', 'error');
+    event.target.value = '';
+    return;
+  }
+
+  hideLoadModal();
+  document.getElementById('pulse-dot').classList.remove('active');
+  document.getElementById('pipeline-steps').classList.remove('visible');
+  document.getElementById('progress-bar').style.width = '0%';
+  document.getElementById('btn-start').disabled = false;
+  document.getElementById('btn-start').textContent = '发送修改';
+  document.getElementById('btn-clear').disabled = false;
+  document.getElementById('status-text').textContent = '正在读取文件夹...';
+  document.getElementById('status-progress').textContent = '—';
+
+  try {
+    // Read meta.json
+    let meta = { topic: 'Unknown', paper_count: 0 };
+    if (byName['meta.json']) {
+      meta = JSON.parse(await byName['meta.json'].text());
+    }
+
+    // Read papers.json (fall back to bib parsing for old projects)
+    let papers = [];
+    if (byName['papers.json']) {
+      papers = JSON.parse(await byName['papers.json'].text());
+    } else if (byName['references.bib']) {
+      const bibText = await byName['references.bib'].text();
+      papers = parseBibtexToPapers(bibText);
+    }
+
+    // Read review.md
+    let reviewText = '';
+    if (byName['review.md']) {
+      reviewText = await byName['review.md'].text();
+    }
+
+    // Blob URLs for image/binary files
+    const blobUrl = (name) => {
+      const f = byName[name];
+      return f ? URL.createObjectURL(f) : null;
+    };
+
+    // Build files dict with blob URLs for non-text files
+    // For text files fetched directly, use blob URLs too so iframe/img work
+    const posterUrl = blobUrl('poster.html');
+    const evoUrl = blobUrl('evolution.svg');
+    const distUrl = blobUrl('distribution.png');
+    const reviewUrl = byName['review.md'] ? blobUrl('review.md') : null;
+    const bibUrl = byName['references.bib'] ? blobUrl('references.bib') : null;
+    const evoNodesUrl = blobUrl('evolution_nodes.json');
+
+    // Read bib text for fallback display when papers are missing
+    let bibText = '';
+    if (byName['references.bib']) {
+      try { bibText = await byName['references.bib'].text(); } catch(e) {}
+    }
+
+    // Compute validation from review text
+    let validCount = 0;
+    let missingList = [];
+    if (reviewText && papers.length > 0) {
+      const cited = new Set();
+      const citeRe = /\[(\d+)\]/g;
+      let m;
+      while ((m = citeRe.exec(reviewText)) !== null) {
+        cited.add(parseInt(m[1]));
+      }
+      validCount = cited.size;
+      for (let i = 1; i <= papers.length; i++) {
+        if (!cited.has(i)) missingList.push(i);
+      }
+    }
+
+    const result = {
+      review_text: reviewText,
+      paper_count: meta.paper_count || papers.length,
+      requested_count: meta.paper_count || papers.length,
+      warnings: [],
+      query_plan: null,
+      papers: papers,
+      validation: {
+        valid: validCount,
+        total: papers.length,
+        missing: missingList,
+      },
+      files: {
+        review: reviewUrl,
+        bib: bibUrl,
+        evolution: evoUrl,
+        evolution_nodes: evoNodesUrl,
+        distribution: distUrl,
+        poster: posterUrl,
+      },
+      _bibText: bibText,
+    };
+
+    jobResult = result;
+    allPapers = papers;
+    currentJobId = null; // folder-loaded projects can't use /api/revise
+    showResults();
+    renderResults(result);
+    document.getElementById('status-text').textContent = '已从文件夹加载项目';
+    const source = meta.topic || (byName['review.md'] ? 'review only' : 'unknown');
+    showToast(`已加载: ${source}`, 'success');
+  } catch(e) {
+    showToast('读取文件夹失败: ' + e.message, 'error');
+    document.getElementById('status-text').textContent = '加载文件夹失败';
+    console.error('handleFolderPick', e);
+  } finally {
+    event.target.value = '';
+  }
+}
+
+function fmtDate(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return iso.slice(0, 10);
+  return d.toLocaleDateString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit' });
+}
+
 </script>
+
+<!-- ====== LOAD PROJECT MODAL ====== -->
+<input type="file" id="folder-picker-input" webkitdirectory style="display:none;" onchange="handleFolderPick(event)">
+<div class="modal-overlay" id="load-modal" style="display:none;" onclick="if(event.target===this)hideLoadModal()">
+  <div class="modal-card">
+    <div class="modal-header">
+      <h3>📂 加载历史项目</h3>
+      <button class="modal-close" onclick="hideLoadModal()">✕</button>
+    </div>
+    <div class="modal-body" id="modal-project-list">
+      <div class="modal-empty">加载中...</div>
+    </div>
+    <div style="padding: 0 16px 16px;">
+      <div class="folder-pick-divider"><span>或</span></div>
+      <button class="btn-folder-pick" onclick="document.getElementById('folder-picker-input').click()">📁 从文件夹加载...</button>
+    </div>
+  </div>
+</div>
 
 </body>
 </html>
