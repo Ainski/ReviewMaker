@@ -31,10 +31,10 @@ def _default_llm_call():
     return call
 
 
-def generate_figure1(papers, topic, job_dir, *, llm_call=None, client=None) -> dict:
+def generate_figure1(papers, topic, job_dir, *, llm_call=None, client=None):
     """Build + render the Figure-1 lineage; write evolution.svg + evolution_nodes.json.
 
-    Returns the graph metrics dict.
+    Returns the built MilestoneGraph (use .metrics for the metrics dict).
     """
     job_dir = Path(job_dir)
     job_dir.mkdir(parents=True, exist_ok=True)
@@ -53,4 +53,4 @@ def generate_figure1(papers, topic, job_dir, *, llm_call=None, client=None) -> d
         json.dumps(nodes, ensure_ascii=False, indent=2), encoding="utf-8")
     logger.info(f"Figure-1 lineage written to {job_dir} (enough={graph.enough}, "
                 f"milestones={graph.metrics.get('num_milestones')})")
-    return graph.metrics
+    return graph
