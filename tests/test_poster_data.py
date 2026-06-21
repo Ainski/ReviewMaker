@@ -35,9 +35,11 @@ def test_select_excerpts_fallback_when_no_sections():
     assert ex[0].text  # non-empty fallback
 
 
-def test_extract_highlight_is_first_conclusion_sentence():
+def test_extract_highlight_picks_most_impactful_sentence():
     hl = extract_highlight(SAMPLE_REVIEW)
-    assert hl.startswith("本综述梳理")
+    # 含"未来/突破/融合"三个趋势词的那句,胜过仅含"关键"的首句
+    assert "深度融合" in hl
+    assert "本综述梳理" not in hl
     assert hl.endswith("。")
 
 

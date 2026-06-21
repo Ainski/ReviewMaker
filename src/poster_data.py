@@ -136,12 +136,27 @@ def select_excerpts(review_summary):
     ]
 
 
+_TREND_RE = re.compile(r"[0-9０-９%％]|首次|显著|大幅|主流|趋势|普遍|一致|未来|融合|突破|核心|关键")
+
+
+def _sentences(text):
+    return [s.strip() for s in re.findall(r".+?[。！？]", text or "") if s.strip()]
+
+
 def extract_highlight(review_summary):
     secs = _sections(review_summary)
-    cc = _find(secs, ["结论", "总结"]) or (secs[-1][1] if secs else review_summary)
-    para = _first_para(cc)
-    m = re.search(r"(.+?[。！？])", para)
-    return (m.group(1) if m else para[:60]).strip()
+    body = (_find(secs, ["结论", "总结", "趋势", "未来", "展望"])
+            or _find(secs, ["对比"])
+            or (secs[-1][1] if secs else review_summary))
+    sents = _sentences(body)
+    if not sents:
+        return (_first_para(body)[:60]).strip()
+    best_i, best_score = 0, -1
+    for i, s in enumerate(sents):
+        score = len(_TREND_RE.findall(s))
+        if score > best_score:
+            best_score, best_i = score, i
+    return sents[best_i]
 
 
 @dataclass
