@@ -49,6 +49,12 @@ class Config:
     # Model settings
     deepseek_model: str = "deepseek-chat"  # or "deepseek-reasoner" for reasoning tasks
 
+    # OpenAlex settings (foundational-work verification for the lineage figure)
+    openalex_base_url: str = "https://api.openalex.org"
+    openalex_mailto: str = field(
+        default_factory=lambda: os.getenv("OPENALEX_MAILTO", "reviewmaker@example.com")
+    )
+
     def ensure_api_keys(self) -> None:
         """Validate that required API keys are set."""
         if not self.deepseek_api_key:

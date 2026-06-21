@@ -639,24 +639,53 @@ def _build_top_papers(x, y, w, papers: list[Paper]) -> tuple[ET.Element, int]:
     return g, new_y
 
 
+def _strip_ns(elem):
+    """Drop XML namespace prefixes from tags/attrib keys (for re-embedding parsed SVG)."""
+    if isinstance(elem.tag, str) and "}" in elem.tag:
+        elem.tag = elem.tag.split("}", 1)[1]
+    for k in list(elem.attrib):
+        if "}" in k:
+            elem.attrib[k.split("}", 1)[1]] = elem.attrib.pop(k)
+    for child in list(elem):
+        _strip_ns(child)
+    return elem
+
+
 def _build_evolution(x, y, w, evo_path: str) -> tuple[ET.Element, int]:
     g, new_y = _section_header(x, y, w, "\U0001F4C8 算法演进")
+    embedded = False
     if evo_path and os.path.exists(evo_path):
         try:
-            data_uri = _img_to_data_uri(evo_path)
-            evo_h = min(w * 9 // 16, 200)
-            g.append(ET.Element("image", _attrib({
-                "x": str(x + 4), "y": str(new_y),
-                "width": str(w - 8), "height": str(evo_h),
-                "href": data_uri, "preserveAspectRatio": "xMidYMid meet",
-            })))
-            new_y += evo_h + 8
+            if evo_path.lower().endswith(".svg"):
+                # Embed the lineage as a nested <svg> (vector — scales + rasterizes cleanly)
+                root = _strip_ns(ET.fromstring(open(evo_path, encoding="utf-8").read()))
+                vb = root.get("viewBox", "0 0 1460 760").split()
+                vbw, vbh = float(vb[2]), float(vb[3])
+                evo_h = int(min((w - 8) * vbh / vbw, 240))
+                wrapper = ET.Element("svg", _attrib({
+                    "x": str(x + 4), "y": str(new_y),
+                    "width": str(w - 8), "height": str(evo_h),
+                    "viewBox": root.get("viewBox", "0 0 1460 760"),
+                    "preserveAspectRatio": "xMidYMid meet",
+                }))
+                for child in list(root):
+                    wrapper.append(child)
+                g.append(wrapper)
+                new_y += evo_h + 8
+                embedded = True
+            else:
+                data_uri = _img_to_data_uri(evo_path)
+                evo_h = min(w * 9 // 16, 200)
+                g.append(ET.Element("image", _attrib({
+                    "x": str(x + 4), "y": str(new_y),
+                    "width": str(w - 8), "height": str(evo_h),
+                    "href": data_uri, "preserveAspectRatio": "xMidYMid meet",
+                })))
+                new_y += evo_h + 8
+                embedded = True
         except Exception as e:
             logger.warning(f"演进图嵌入失败: {e}")
-            g.append(_text(x + 10, new_y + 16, "[无法嵌入]",
-                           font_size=SMALL_SIZE, fill="#9E9E9E"))
-            new_y += 36
-    else:
+    if not embedded:
         g.append(_text(x + 10, new_y + 16, "[无法嵌入]",
                        font_size=SMALL_SIZE, fill="#9E9E9E"))
         new_y += 36

@@ -24,7 +24,8 @@ from src.paper_ranker import rank_papers, filter_papers, rerank_papers_with_llm
 from src.review_generator import generate_review, extract_paper_details, revise_review
 from src.query_planner import plan_review_query
 from src.citation_manager import generate_bibtex_file, append_references_to_review, validate_citations
-from src.evolution_diagram import generate_evolution_diagram, generate_category_distribution_chart
+from src.evolution_diagram import generate_category_distribution_chart
+from src.gui_figure1 import generate_figure1
 from src.svg_poster_generator import generate_svg_poster
 
 logger = logging.getLogger(__name__)
@@ -245,22 +246,31 @@ def _run_pipeline_thread(job_id: str, topic: str, max_papers: int, year_range: i
         generate_bibtex_file(papers, str(bib_path))
         _update_job(job_id, progress=75, step="综述已生成")
 
-        # Step 5: Diagrams
-        _update_job(job_id, step="正在生成演进图...", progress=80)
-        evo_path = job_dir / "evolution.png"
-        generate_evolution_diagram(papers, topic, output_path=str(evo_path))
+        # Step 5: Diagrams — Figure-1 milestone lineage (SVG) replaces the scatter
+        _update_job(job_id, step="正在生成演进谱系图...", progress=80)
+        evo_path = job_dir / "evolution.svg"
+        try:
+            generate_figure1(papers, topic, job_dir)
+        except Exception as e:
+            logger.exception("Figure-1 generation failed")
+            _update_job(job_id, step=f"演进图生成出错: {e}")
 
         dist_path = job_dir / "distribution.png"
         generate_category_distribution_chart(papers, output_path=str(dist_path))
         _update_job(job_id, progress=90, step="图表已生成")
 
-        # Poster
+        # Poster (embeds the static evolution.svg)
         poster_path = None
         if not no_poster:
             _update_job(job_id, step="正在生成海报...", progress=92)
             poster_path = job_dir / "poster.svg"
-            generate_svg_poster(papers, topic, review_text, str(evo_path),
-                                str(poster_path), generate_png=True)
+            try:
+                generate_svg_poster(papers, topic, review_text, str(evo_path),
+                                    str(poster_path), generate_png=True)
+            except Exception as e:
+                logger.exception("Poster generation failed")
+                _update_job(job_id, step=f"海报生成出错: {e}")
+                poster_path = None
 
         # Build paper list data for frontend
         paper_list = []
@@ -310,7 +320,8 @@ def _run_pipeline_thread(job_id: str, topic: str, max_papers: int, year_range: i
                 "files": {
                     "review": f"/output/{job_id}/review.md",
                     "bib": f"/output/{job_id}/references.bib",
-                    "evolution": f"/output/{job_id}/evolution.png",
+                    "evolution": f"/output/{job_id}/evolution.svg",
+                    "evolution_nodes": f"/output/{job_id}/evolution_nodes.json",
                     "distribution": f"/output/{job_id}/distribution.png",
                     "poster": f"/output/{job_id}/poster.svg" if poster_path else None,
                     "poster_png": f"/output/{job_id}/poster.png" if poster_path else None,

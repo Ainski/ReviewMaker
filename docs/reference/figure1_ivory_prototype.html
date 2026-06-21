@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>算法演进图 — Ivory Ledger 学术风</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Jost:wght@200;300;400;500&family=Lora:ital@0;1&family=JetBrains+Mono:wght@400;500&family=Noto+Sans+SC:wght@300;400;500;700&family=Noto+Serif+SC:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --cream:#FAFADF; --cream-warm:#F5F0E4; --cream-deep:#F0F0D4;
+    --ink:#1A1A16; --graphite:#5E5E54; --graphite-l:#8A8A80;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{background:#E9E9D2;color:var(--ink);
+    font-family:"Jost","Noto Sans SC",system-ui,sans-serif;padding:30px;}
+  .stage{background:var(--cream);max-width:1460px;margin:0 auto;
+    padding:46px 60px 40px;box-shadow:0 2px 40px rgba(0,0,0,.08);}
+  .kicker{font-family:"JetBrains Mono",monospace;font-size:11px;letter-spacing:.18em;
+    text-transform:uppercase;color:var(--graphite-l);margin-bottom:10px;}
+  .title{font-family:"Jost","Noto Sans SC",sans-serif;font-weight:300;font-size:30px;
+    line-height:1.15;letter-spacing:-.01em;color:var(--ink);margin-bottom:8px;}
+  .rule36{width:36px;height:1px;background:var(--ink);margin:14px 0 6px;}
+  svg{width:100%;height:auto;display:block;}
+  .foot{display:flex;justify-content:space-between;border-top:1px solid var(--ink);
+    margin-top:14px;padding-top:8px;font-family:"JetBrains Mono",monospace;
+    font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--graphite-l);}
+  .toolbar{max-width:1460px;margin:0 auto 16px;display:flex;gap:10px;align-items:center;}
+  .toolbar .lbl{font-family:"JetBrains Mono",monospace;font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--graphite);}
+  .toggle{display:inline-flex;border:1px solid var(--ink);}
+  .toggle button{border:none;background:transparent;padding:6px 13px;font-size:11px;cursor:pointer;
+    font-family:"JetBrains Mono",monospace;letter-spacing:.1em;text-transform:uppercase;color:var(--graphite);}
+  .toggle button.active{background:var(--ink);color:var(--cream);}
+</style>
+</head>
+<body>
+<div class="toolbar">
+  <span class="lbl">时代分段</span>
+  <div class="toggle" id="eraToggle">
+    <button data-v="on" class="active">Segmented</button>
+    <button data-v="off">Linear</button>
+  </div>
+  <span class="lbl" style="margin-left:18px">奠基底色</span>
+  <div class="toggle" id="bandToggle">
+    <button data-v="warm" class="active">Warm band</button>
+    <button data-v="none">None</button>
+  </div>
+</div>
+
+<div class="stage">
+  <div class="kicker">Algorithm Lineage · 算法演进谱系</div>
+  <div class="title">大模型推理中 Transformer 注意力机制优化 —— KV Cache 与 Flash Attention</div>
+  <div class="rule36"></div>
+  <svg id="svg" viewBox="0 0 1460 820"></svg>
+  <div class="foot"><span>Fig. 1 — Method Evolution Timeline</span><span>14 Milestones · 4 Foundational · 3 Lineages</span></div>
+</div>
+
+<script>
+const branches=[
+  {id:"A",name:"KV Cache 压缩与淘汰",mono:"COMPRESSION / EVICTION"},
+  {id:"B",name:"系统 / IO-aware 引擎",mono:"SYSTEM / IO-AWARE"},
+  {id:"C",name:"量化 / 紧凑存储",mono:"QUANTIZATION / STORAGE"},
+];
+const FOUND="__found__";
+const M=[
+  {name:"Transformer",authors:"Vaswani et al",year:2017,branch:FOUND,contrib:"提出自注意力,奠定一切后续"},
+  {name:"MQA",authors:"Shazeer",year:2019,branch:FOUND,contrib:"多查询注意力,首次压缩 KV"},
+  {name:"FlashAttention",authors:"Dao et al",year:2022,branch:FOUND,contrib:"IO-aware 精确注意力"},
+  {name:"GQA",authors:"Ainslie et al",year:2023,branch:FOUND,contrib:"分组查询,平衡质量与开销"},
+  {name:"Ada-KV",authors:"Feng et al",year:2024,branch:"A",contrib:"自适应预算的 KV 淘汰"},
+  {name:"Self-Attn Drop",authors:"Wang et al",year:2025,branch:"A",contrib:"自注意力信号指导丢弃"},
+  {name:"KeepKV",authors:"Tian et al",year:2025,branch:"A",contrib:"周期性无损压缩"},
+  {name:"ReST-KV",authors:"An et al",year:2026,branch:"A",contrib:"按层输出鲁棒淘汰"},
+  {name:"FlashInfer",authors:"Ye et al",year:2025,branch:"B",contrib:"可定制高效注意力引擎"},
+  {name:"LMCache",authors:"Liu et al",year:2025,branch:"B",contrib:"企业级 KV Cache 缓存层"},
+  {name:"KVOpt Strategies",authors:"Xu et al",year:2026,branch:"B",contrib:"可扩展系统优化策略"},
+  {name:"Cross-Layer KV",authors:"Brandon et al",year:2024,branch:"C",contrib:"跨层共享降低体积"},
+  {name:"VecInfer",authors:"Yao et al",year:2025,branch:"C",contrib:"低比特 KV 量化推理"},
+  {name:"KV Transform Coding",authors:"Staniszewski",year:2025,branch:"C",contrib:"变换编码紧凑存储"},
+];
+const eras=[{name:"基础奠基时代",mono:"FOUNDATIONS",y0:2017,y1:2023},{name:"KV Cache 优化爆发",mono:"KV-CACHE BOOM",y0:2024,y1:2026}];
+
+const INK="#1A1A16",GRAPH="#5E5E54",GRAPHL="#8A8A80",CREAM="#FAFADF",WARM="#F5F0E4";
+let showEras=true, warmBand=true;
+const ns="http://www.w3.org/2000/svg";
+const SANS='Jost, "Noto Sans SC", sans-serif';
+const MONO='"JetBrains Mono", monospace';
+function el(t,a,txt){const e=document.createElementNS(ns,t);for(const k in a)e.setAttribute(k,a[k]);if(txt!=null)e.textContent=txt;return e;}
+
+const W=1460,H=820,PAD={l:96,r:184,t:54,b:60};
+const allYears=M.map(m=>m.year),yMin=Math.min(...allYears),yMax=Math.max(...allYears);
+const FORK=2023.5;
+function makeX(gap){
+  const innerW=W-PAD.l-PAD.r;
+  if(!gap) return yr=>PAD.l+(yr-yMin)/(yMax-yMin)*innerW;
+  const lW=innerW*0.36,gW=innerW*0.10,rW=innerW*0.54;
+  return yr=> yr<=2023 ? PAD.l+(yr-2017)/(2023-2017)*lW
+                       : PAD.l+lW+gW+(yr-2024)/(2026-2024)*rW;
+}
+function laneY(bid,base){ if(bid===FOUND)return base; const i=branches.findIndex(b=>b.id===bid); return base+(i-(branches.length-1)/2)*186; }
+
+function render(){
+  const svg=document.getElementById("svg"); svg.innerHTML="";
+  const xs=makeX(showEras), base=H/2-4;
+  svg.appendChild(el("rect",{x:0,y:0,width:W,height:H,fill:CREAM}));
+
+  // era warm band (very subtle) on the BOOM zone
+  if(showEras && warmBand){
+    const x0=xs(2024)-26, x1=W-PAD.r+22;
+    svg.appendChild(el("rect",{x:x0,y:PAD.t-10,width:x1-x0,height:H-PAD.t-PAD.b+6,fill:WARM}));
+  }
+
+  const fork=xs(FORK);
+  // foundational spine (1px ink rule)
+  svg.appendChild(el("line",{x1:PAD.l,y1:base,x2:fork,y2:base,stroke:INK,"stroke-width":1}));
+
+  // lanes: 1px ink rules + fork elbows
+  branches.forEach(b=>{
+    const ly=laneY(b.id,base),x1=W-PAD.r;
+    svg.appendChild(el("path",{d:`M${fork},${base} C${fork+34},${base} ${fork+34},${ly} ${fork+68},${ly}`,fill:"none",stroke:INK,"stroke-width":1}));
+    svg.appendChild(el("line",{x1:fork+68,y1:ly,x2:x1,y2:ly,stroke:INK,"stroke-width":1}));
+    // tiny arrow tick
+    svg.appendChild(el("path",{d:`M${x1},${ly} l-7,-3.5 M${x1},${ly} l-7,3.5`,stroke:INK,"stroke-width":1,fill:"none"}));
+    // branch label at right end — Noto Sans SC name + mono sub
+    svg.appendChild(el("text",{x:x1+10,y:ly-3,"font-family":SANS,"font-weight":500,"font-size":13,fill:INK},b.name));
+    svg.appendChild(el("text",{x:x1+10,y:ly+11,"font-family":MONO,"font-size":8.5,"letter-spacing":"0.1em",fill:GRAPHL},b.mono));
+  });
+
+  // era dividers + labels + ··· gap
+  if(showEras){
+    // hairline vertical divider at the gap center
+    const gx=(xs(2023)+xs(2024))/2;
+    svg.appendChild(el("text",{x:gx,y:base+5,"text-anchor":"middle","font-family":MONO,"font-size":18,fill:GRAPHL},"···"));
+    eras.forEach((e,i)=>{
+      const cx=(xs(e.y0)+xs(e.y1))/2;
+      svg.appendChild(el("text",{x:cx,y:H-30,"text-anchor":"middle","font-family":SANS,"font-weight":500,"font-size":12,fill:GRAPH},e.name));
+      svg.appendChild(el("text",{x:cx,y:H-16,"text-anchor":"middle","font-family":MONO,"font-size":8.5,"letter-spacing":"0.16em",fill:GRAPHL},e.mono));
+    });
+  }
+
+  function node(m,ly,side){
+    const x=xs(m.year);
+    const nearR = x>W-PAD.r-40;
+    // timeline dot: black with cream-warm ring
+    svg.appendChild(el("circle",{cx:x,cy:ly,r:4,fill:INK,stroke:warmBand&&showEras&&m.year>=2024?WARM:CREAM,"stroke-width":2}));
+    // connector hairline
+    const ty=ly+side*46;
+    svg.appendChild(el("line",{x1:x,y1:ly,x2:x,y2:ty+(side<0?10:-10),stroke:INK,"stroke-width":0.6,opacity:.5}));
+    const anchor = nearR?"end":"start";
+    const tx = nearR? x-7 : x+7;
+    // name (Jost)
+    svg.appendChild(el("text",{x:tx,y:ty,"text-anchor":anchor,"font-family":SANS,"font-weight":400,"font-size":13,fill:INK},m.name));
+    // authors · year (mono uppercase tracked)
+    svg.appendChild(el("text",{x:tx,y:ty+13,"text-anchor":anchor,"font-family":MONO,"font-size":8.5,"letter-spacing":"0.12em",fill:GRAPHL},`${m.authors.toUpperCase()} · ${m.year}`));
+    // contribution (Noto Sans SC body, graphite)
+    svg.appendChild(el("text",{x:tx,y:ty+27,"text-anchor":anchor,"font-family":SANS,"font-weight":400,"font-size":10.5,fill:GRAPH},m.contrib));
+  }
+  // foundational alternate
+  M.filter(m=>m.branch===FOUND).forEach((m,i)=>node(m,base,i%2===0?-1:1));
+  branches.forEach(b=>{
+    const list=M.filter(m=>m.branch===b.id).sort((p,q)=>p.year-q.year);
+    let lastY=null,lastS=-1;
+    list.forEach((m,i)=>{let s=i%2===0?1:-1; if(m.year===lastY)s=-lastS; node(m,laneY(b.id,base),s); lastY=m.year;lastS=s;});
+  });
+
+  // year axis ticks (mono) under each lane's spine, light
+  const yset=[...new Set(allYears)].sort();
+  // foundational years on spine
+  // (years are shown inline via node meta; add faint axis ticks at fork base)
+}
+
+document.getElementById("eraToggle").addEventListener("click",e=>{if(e.target.tagName!=="BUTTON")return;showEras=e.target.dataset.v==="on";document.querySelectorAll("#eraToggle button").forEach(b=>b.classList.toggle("active",b===e.target));render();});
+document.getElementById("bandToggle").addEventListener("click",e=>{if(e.target.tagName!=="BUTTON")return;warmBand=e.target.dataset.v==="warm";document.querySelectorAll("#bandToggle button").forEach(b=>b.classList.toggle("active",b===e.target));render();});
+// wait for fonts then render
+if(document.fonts&&document.fonts.ready){document.fonts.ready.then(render);}
+render();
+</script>
+</body>
+</html>
