@@ -39,6 +39,35 @@ def _dedupe_keep_order(items: list[str]) -> list[str]:
     return result
 
 
+# Common words the context regex grabs after a trigger ("benchmarks demonstrate
+# that ...", "experiments on the ...") that are NOT dataset names.
+_RULE_STOPWORDS = {
+    "the", "a", "an", "and", "or", "of", "on", "in", "to", "for", "with", "we",
+    "demonstrate", "demonstrates", "demonstrating", "show", "shows", "shown",
+    "achieve", "achieves", "achieved", "improve", "improves", "improved",
+    "outperform", "outperforms", "reduce", "reduces", "results", "result",
+    "experiments", "experiment", "evaluation", "evaluations", "benchmark",
+    "benchmarks", "dataset", "datasets", "task", "tasks", "method", "methods",
+    "model", "models", "approach", "baseline", "baselines", "multiple",
+    "several", "various", "many", "standard", "common", "diverse", "extensive",
+    "comprehensive", "large", "small", "new", "novel", "real", "all", "both",
+    "these", "those", "such", "including", "that", "this", "our", "their",
+    "effectiveness", "performance", "accuracy", "consistent", "significant",
+}
+
+
+def _looks_like_junk(token: str) -> bool:
+    """A context-regex candidate is junk if it is a known common word, or an
+    all-lowercase word with no digit. Real dataset/benchmark names carry an
+    uppercase letter (MMLU, FooBench) or a digit (C4, CIFAR-10)."""
+    low = token.lower()
+    if low in _RULE_STOPWORDS:
+        return True
+    if token.islower() and not any(c.isdigit() for c in token):
+        return True
+    return False
+
+
 def extract_datasets_from_evidence(text: str) -> list[str]:
     """Rule-based fallback for datasets, benchmarks, workloads and traces."""
     if not text:
@@ -60,7 +89,7 @@ def extract_datasets_from_evidence(text: str) -> list[str]:
             parts = re.split(r"[,，、;/]|\band\b", match)
             for part in parts:
                 part = part.strip(" .()[]{}")
-                if len(part) >= 2 and re.search(r"[A-Za-z0-9]", part):
+                if len(part) >= 2 and re.search(r"[A-Za-z0-9]", part) and not _looks_like_junk(part):
                     found.append(part)
 
     return _dedupe_keep_order(found)[:12]
