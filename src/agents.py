@@ -26,7 +26,9 @@ from src.citation_manager import (
     validate_citations,
 )
 from src.evolution_diagram import generate_evolution_diagram, generate_category_distribution_chart
-from src.svg_poster_generator import generate_svg_poster
+from src.milestone_graph import build_milestone_graph
+from src.gui_figure1 import _default_llm_call
+from src.poster_generator import generate_poster
 from src.rag_engine import batch_rag_enrich
 
 logger = logging.getLogger(__name__)
@@ -301,6 +303,18 @@ class VisualizerAgent(BaseAgent):
     def __init__(self):
         super().__init__("VisualizerAgent")
 
+    def _build_poster(self, state):
+        graph = build_milestone_graph(state.papers, state.topic, llm_call=_default_llm_call())
+        result = generate_poster(
+            topic=state.topic,
+            review_summary=state.review_text,
+            papers=state.papers,
+            graph=graph,
+            out_dir=state.output_dir,
+        )
+        state.poster_path = result.get("png") or result["html"]
+        self.log(f"海报: {state.poster_path}")
+
     def run(self, state: WorkflowState) -> WorkflowState:
         if not state.papers:
             state.errors.append("VisualizerAgent: 无输入论文")
@@ -319,38 +333,9 @@ class VisualizerAgent(BaseAgent):
         generate_category_distribution_chart(state.papers, output_path=dist_path)
         state.dist_path = dist_path
 
-        # Poster with paper figures
+        # Poster
         if not state.no_poster:
-            poster_path = os.path.join(state.output_dir, "poster.svg")
-
-            # Collect paper figures from RAG data
-            paper_figures = []
-            for p in state.papers:
-                rag = state.rag_data.get(p.arxiv_id, {})
-                images = rag.get("images", [])
-                if images:
-                    # Take the largest image (probably the most meaningful figure)
-                    largest = max(images, key=lambda x: x.get("size_bytes", 0))
-                    paper_figures.append({
-                        "arxiv_id": p.arxiv_id,
-                        "first_author": p.first_author,
-                        "year": p.year,
-                        "image_bytes": largest["image_bytes"],
-                    })
-
-            self.log(f"从论文PDF提取了 {len(paper_figures)} 张图片用于海报")
-
-            generate_svg_poster(
-                papers=state.papers,
-                topic=state.topic,
-                review_summary=state.review_text,
-                evolution_diagram_path=evo_path,
-                output_path=poster_path,
-                paper_figures=paper_figures if paper_figures else None,
-                generate_png=True,
-            )
-            state.poster_path = poster_path
-            self.log(f"海报: {poster_path}")
+            self._build_poster(state)
 
         state.log_step(f"可视化: 演进图+分布图+海报")
         return state
