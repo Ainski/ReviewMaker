@@ -2195,7 +2195,7 @@ function buildPaperCard(p) {
     <div class="paper-details">
       ${p.key_innovation ? `<div class="detail-row"><span class="detail-label">核心创新</span><br>${escapeHtml(p.key_innovation)}</div>` : ''}
       ${p.key_results ? `<div class="detail-row"><span class="detail-label">关键结果</span><br>${escapeHtml(p.key_results)}</div>` : ''}
-      ${p.datasets_used ? `<div class="detail-row"><span class="detail-label">数据集 / Benchmark / Workload</span><br>${escapeHtml(p.datasets_used)}</div>` : ''}
+      ${(Array.isArray(p.datasets_used) && p.datasets_used.length) ? `<div class="detail-row"><span class="detail-label">数据集 / Benchmark / Workload</span><br>${escapeHtml(p.datasets_used.join('、'))}</div>` : ''}
       ${p.evidence_source ? `<div class="detail-row"><span class="detail-label">信息来源</span><br>${escapeHtml(p.evidence_source)}</div>` : ''}
       <div class="paper-actions-row">
         <div class="paper-actions-left">
