@@ -61,3 +61,31 @@ def test_build_poster_data_full():
     assert len(d.stats) == 4 and len(d.excerpts) == 2
     assert len(d.taxonomy) == 4 and len(d.tradeoff.rows) == 3
     assert d.highlight and d.foot_left
+
+
+from src.poster_data import _budget
+
+
+def test_budget_scales_with_paper_count_and_caps():
+    assert _budget(10) == 220
+    assert _budget(20) == 320
+    assert _budget(25) == 420
+    assert _budget(100) == 420  # 硬上限
+
+
+from src.poster_data import _extract_block
+
+
+def test_extract_block_joins_paragraphs_up_to_budget():
+    body = "第一段甲乙丙。\n\n第二段丁戊己。\n\n| 表格行 | 不要 |\n\n第三段庚辛壬。"
+    out = _extract_block(body, 200)
+    assert "第一段甲乙丙" in out
+    assert "第二段丁戊己" in out
+    assert "表格行" not in out          # 跳过表格行
+    assert len(out) > len("第一段甲乙丙。")  # 比单段更厚
+
+
+def test_extract_block_respects_budget():
+    body = "。".join(f"句子{i}" for i in range(50)) + "。"
+    out = _extract_block(body, 60)
+    assert len(out) <= 62  # budget + 收尾标点容差

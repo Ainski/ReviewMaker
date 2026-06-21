@@ -92,6 +92,27 @@ def _truncate(text, limit=150):
     return cut + "…"
 
 
+def _budget(n_papers: int) -> int:
+    """Adaptive character budget for poster prose, scaled by paper count."""
+    if n_papers >= 23:
+        return 420
+    if n_papers >= 15:
+        return 320
+    return 220
+
+
+def _extract_block(body: str, budget: int) -> str:
+    """Join non-table/heading/list paragraphs, then truncate to budget at a
+    sentence boundary. Richer than _first_para (which took only one paragraph)."""
+    paras = []
+    for para in re.split(r"\n\s*\n", body or ""):
+        p = para.strip()
+        if p and p[0] not in "|#-!":
+            paras.append(p)
+    joined = " ".join(paras).strip()
+    return _truncate(joined, budget)
+
+
 def _find(secs, keys):
     for title, body in secs:
         if any(k in title for k in keys):
