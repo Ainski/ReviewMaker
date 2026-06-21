@@ -93,9 +93,15 @@ def render_figure1_svg(graph, embed=False):
 
     # warm band over the last (boom) era
     if len(graph.eras) >= 2:
-        last = graph.eras[-1]
-        x0 = _xs_interp(xs, last.y0) - 26
         x1 = W - PAD["r"] + 20
+        # shade the last era; if it is a thin sliver (e.g. the newest year forms
+        # its own era), fold in earlier eras so the band reads as a meaningful
+        # "recent period" instead of a strip on the right edge.
+        idx = len(graph.eras) - 1
+        x0 = _xs_interp(xs, graph.eras[idx].y0) - 26
+        while x1 - x0 < 160 and idx > 0:
+            idx -= 1
+            x0 = _xs_interp(xs, graph.eras[idx].y0) - 26
         parts.append(f'<rect class="fig-warm" x="{x0:.1f}" y="{PAD["t"]+18}" '
                      f'width="{x1-x0:.1f}" height="{H-PAD["t"]-PAD["b"]-6}"/>')
 

@@ -1595,8 +1595,7 @@ body {
     </div>
     <div class="tab-content" id="tab-poster">
       <div class="img-panel">
-        <object id="img-poster" data="" type="image/svg+xml" style="display:none; width:100%; min-height:500px;">你的浏览器不支持 SVG</object>
-        <img id="img-poster-fallback" src="" alt="学术海报" style="display:none;">
+        <img id="img-poster" src="" alt="学术海报" style="display:none; width:100%; height:auto;">
         <div class="caption">综合学术海报</div>
       </div>
     </div>
@@ -2087,7 +2086,7 @@ function renderResults(result) {
     if (result.files.review) dlHtml += `<a class="btn-download" href="${result.files.review}" download>下载综述 (.md)</a>`;
     if (result.files.bib) dlHtml += `<a class="btn-download" href="${result.files.bib}" download>下载 BibTeX (.bib)</a>`;
     if (result.files.evolution) dlHtml += `<a class="btn-download" href="${result.files.evolution}" download>下载演进图 (.svg)</a>`;
-    if (result.files.poster) dlHtml += `<a class="btn-download" href="${result.files.poster}" download>下载海报 (.svg)</a>`;
+    if (result.files.poster_png) dlHtml += `<a class="btn-download" href="${result.files.poster_png}" download>下载海报 (.png)</a>`;
     downloadBar.innerHTML = dlHtml;
     downloadBar.style.display = 'flex';
   }
@@ -2108,11 +2107,11 @@ function renderResults(result) {
     renderEvolutionFigure(result.files.evolution, result.files.evolution_nodes);
   }
 
-  // Poster tab — prefer <object> for SVG
-  if (result.files && result.files.poster) {
-    const obj = document.getElementById('img-poster');
-    obj.data = result.files.poster + '?t=' + Date.now();
-    obj.style.display = '';
+  // Poster tab — show the rendered PNG fit-to-width (vertical scroll only)
+  if (result.files && (result.files.poster_png || result.files.poster)) {
+    const img = document.getElementById('img-poster');
+    img.src = (result.files.poster_png || result.files.poster) + '?t=' + Date.now();
+    img.style.display = '';
   }
 
   // References tab
@@ -2309,7 +2308,7 @@ function clearResults() {
   document.getElementById('paper-search-bar').style.display = 'none';
   document.getElementById('evo-figure').innerHTML = '';
   clearEvoDetail();
-  document.getElementById('img-poster').data = '';
+  document.getElementById('img-poster').src = '';
   document.getElementById('img-poster').style.display = 'none';
   document.getElementById('refs-preview').innerHTML = '';
   document.getElementById('download-bar-review').innerHTML = '';
