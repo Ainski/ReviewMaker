@@ -261,16 +261,15 @@ def _run_pipeline_thread(job_id: str, topic: str, max_papers: int, year_range: i
         _update_job(job_id, progress=90, step="图表已生成")
 
         # Poster (redesigned: figure1 lineage hero + 图文并茂, reuses the graph above)
-        poster_path = None
+        poster_html_path = None
         if not no_poster and graph is not None:
             _update_job(job_id, step="正在生成海报...", progress=92)
             try:
-                result = generate_poster(topic, review_text, papers, graph, str(job_dir))
-                poster_path = result.get("png") or result.get("html")
+                result = generate_poster(topic, review_text, papers, graph, str(job_dir), rasterize=False)
+                poster_html_path = result.get("html")
             except Exception as e:
                 logger.exception("Poster generation failed")
                 _update_job(job_id, step=f"海报生成出错: {e}")
-                poster_path = None
 
         # Build paper list data for frontend
         paper_list = []
@@ -293,6 +292,22 @@ def _run_pipeline_thread(job_id: str, topic: str, max_papers: int, year_range: i
                 "evidence_source": p.evidence_source or "",
                 "detail_confidence": p.detail_confidence,
             })
+
+        # Persist paper metadata + project meta so the user can
+        # reload past projects via the GUI without re-running.
+        import json as _json
+        (job_dir / "papers.json").write_text(
+            _json.dumps(paper_list, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+        (job_dir / "meta.json").write_text(
+            _json.dumps({
+                "topic": topic,
+                "paper_count": len(papers),
+                "created_at": datetime.now().isoformat(),
+            }, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
 
         _update_job(job_id,
             status="done",
@@ -323,8 +338,7 @@ def _run_pipeline_thread(job_id: str, topic: str, max_papers: int, year_range: i
                     "evolution": f"/output/{job_id}/evolution.svg",
                     "evolution_nodes": f"/output/{job_id}/evolution_nodes.json",
                     "distribution": f"/output/{job_id}/distribution.png",
-                    "poster": f"/output/{job_id}/poster.html" if poster_path else None,
-                    "poster_png": f"/output/{job_id}/poster.png" if poster_path else None,
+                    "poster": f"/output/{job_id}/poster.html" if poster_html_path else None,
                 }
             },
         )
@@ -471,6 +485,159 @@ def api_config():
         "year_range": config.year_range,
         "has_api_key": bool(config.deepseek_api_key),
     })
+
+
+@app.route("/api/projects")
+def api_projects():
+    """List past projects available for reload."""
+    projects = []
+    if OUTPUT_BASE.is_dir():
+        for d in sorted(OUTPUT_BASE.iterdir(), reverse=True):
+            if not d.is_dir():
+                continue
+            meta_file = d / "meta.json"
+            if not meta_file.is_file():
+                continue
+            try:
+                meta = json.loads(meta_file.read_text(encoding="utf-8"))
+            except Exception:
+                continue
+            projects.append({
+                "job_id": d.name,
+                "topic": meta.get("topic", d.name),
+                "paper_count": meta.get("paper_count", 0),
+                "created_at": meta.get("created_at", ""),
+            })
+    return jsonify(projects)
+
+
+@app.route("/api/load", methods=["POST"])
+def api_load():
+    """Load a past project from disk and populate _jobs."""
+    data = request.get_json()
+    job_id = (data.get("job_id") or "").strip()
+    if not job_id:
+        return jsonify({"error": "缺少 job_id"}), 400
+
+    job_dir = OUTPUT_BASE / job_id
+    if not job_dir.is_dir():
+        return jsonify({"error": f"项目目录不存在: {job_id}"}), 404
+
+    # meta.json
+    meta_file = job_dir / "meta.json"
+    if not meta_file.is_file():
+        return jsonify({"error": f"项目元数据缺失: {job_id}"}), 404
+    meta = json.loads(meta_file.read_text(encoding="utf-8"))
+
+    # papers.json (fall back to parsing references.bib for old projects)
+    papers_file = job_dir / "papers.json"
+    papers = []
+    if papers_file.is_file():
+        try:
+            papers = json.loads(papers_file.read_text(encoding="utf-8"))
+        except Exception:
+            papers = []
+    if not papers:
+        bib_file = job_dir / "references.bib"
+        if bib_file.is_file():
+            papers = _parse_bibtex_papers(bib_file.read_text(encoding="utf-8"))
+
+    # review.md
+    review_file = job_dir / "review.md"
+    review_text = ""
+    if review_file.is_file():
+        review_text = review_file.read_text(encoding="utf-8")
+
+    # Build files dict — only include files that actually exist
+    def _exists(name):
+        return (job_dir / name).is_file()
+
+    files = {
+        "review": f"/output/{job_id}/review.md" if _exists("review.md") else None,
+        "bib": f"/output/{job_id}/references.bib" if _exists("references.bib") else None,
+        "evolution": f"/output/{job_id}/evolution.svg" if _exists("evolution.svg") else None,
+        "evolution_nodes": f"/output/{job_id}/evolution_nodes.json" if _exists("evolution_nodes.json") else None,
+        "distribution": f"/output/{job_id}/distribution.png" if _exists("distribution.png") else None,
+        "poster": f"/output/{job_id}/poster.html" if _exists("poster.html") else None,
+    }
+
+    # Recompute validation from review text
+    from src.citation_manager import validate_citations
+    validation = validate_citations(review_text, len(papers))
+
+    result = {
+        "review_text": review_text,
+        "paper_count": meta.get("paper_count", len(papers)),
+        "requested_count": meta.get("paper_count", len(papers)),
+        "warnings": [],
+        "query_plan": None,
+        "papers": papers,
+        "validation": {
+            "valid": len(validation["valid_citations"]),
+            "total": len(papers),
+            "missing": list(validation["missing_citations"]),
+        },
+        "files": files,
+    }
+
+    # Populate _jobs so /api/revise works on loaded projects
+    with _jobs_lock:
+        _jobs[job_id] = {
+            "id": job_id,
+            "topic": meta.get("topic", ""),
+            "status": "done",
+            "progress": 100,
+            "step": "已从磁盘加载",
+            "message": "",
+            "result": result,
+            "created_at": meta.get("created_at", ""),
+        }
+
+    return jsonify({"result": result})
+
+
+def _parse_bibtex_papers(bib_text: str) -> list[dict]:
+    """Parse simple BibTeX entries into minimal paper dicts for the GUI."""
+    import re as _re
+    papers = []
+    # Match @type{key, ... fields ...}
+    for m in _re.finditer(r'@\w+\{([^,]*),\s*(.*?)\n\}', bib_text, _re.DOTALL):
+        body = m.group(2)
+        title = _bib_field(body, 'title')
+        author = _bib_field(body, 'author')
+        year_str = _bib_field(body, 'year')
+        year = int(year_str) if year_str.isdigit() else 0
+        first_author = 'Unknown'
+        if author:
+            cleaned = _re.sub(r'[{}]', '', author)
+            first_author = cleaned.split(' and ')[0].split(',')[0].strip()
+        venue = _bib_field(body, 'journal') or _bib_field(body, 'booktitle') or ''
+        arxiv_id = _bib_field(body, 'eprint') if _bib_field(body, 'archiveprefix').lower() == 'arxiv' else ''
+        papers.append({
+            'index': len(papers) + 1,
+            'title': title or 'Unknown Title',
+            'first_author': first_author,
+            'year': year,
+            'venue': venue,
+            'citations': 0,
+            'arxiv_url': f'https://arxiv.org/abs/{arxiv_id}' if arxiv_id else None,
+            'pdf_url': None,
+            'has_code': False,
+            'code_urls': [],
+            'method_category': '未分类',
+            'key_innovation': '',
+            'datasets_used': [],
+            'key_results': '',
+            'evidence_source': '',
+            'detail_confidence': 0,
+        })
+    return papers
+
+
+def _bib_field(body: str, name: str) -> str:
+    import re as _re
+    m = _re.search(rf'{name}\s*=\s*[{{"]([^}}{{"\n]+)[}}"]', body, _re.IGNORECASE)
+    return m.group(1).strip() if m else ''
 
 
 def main():
