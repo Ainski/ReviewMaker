@@ -38,3 +38,18 @@ def test_node_dots_have_keys():
 def test_insufficient():
     assert "信息不足" in render_insufficient_svg("某冷门主题")
     assert render_insufficient_svg("x").startswith("<svg")
+
+
+from tests._poster_fixtures import sample_graph
+
+
+def test_embed_mode_omits_internal_chrome():
+    full, _ = render_figure1_svg(sample_graph(), embed=False)
+    bare, _ = render_figure1_svg(sample_graph(), embed=True)
+    assert "ALGORITHM LINEAGE" in full
+    assert "METHOD EVOLUTION TIMELINE" in full
+    assert "ALGORITHM LINEAGE" not in bare
+    assert "METHOD EVOLUTION TIMELINE" not in bare
+    # graph body still present in both
+    assert "KV Cache 压缩与淘汰" in bare
+    assert "<circle" in bare

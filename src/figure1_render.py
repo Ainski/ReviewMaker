@@ -73,7 +73,7 @@ def _era_name(graph, year):
     return ""
 
 
-def render_figure1_svg(graph):
+def render_figure1_svg(graph, embed=False):
     L = compute_layout(graph)
     W, H, PAD = L["W"], L["H"], L["PAD"]
     base = L["base_y"]
@@ -87,8 +87,9 @@ def render_figure1_svg(graph):
     parts.append(f'<rect class="fig-bg" x="0" y="0" width="{W}" height="{H}"/>')
 
     # title chrome (top-left)
-    parts.append(f'<text class="t-kicker" x="{PAD["l"]}" y="22">ALGORITHM LINEAGE · 算法演进谱系</text>')
-    parts.append(f'<text class="t-title" x="{PAD["l"]}" y="46">{_esc(graph.topic)}</text>')
+    if not embed:
+        parts.append(f'<text class="t-kicker" x="{PAD["l"]}" y="22">ALGORITHM LINEAGE · 算法演进谱系</text>')
+        parts.append(f'<text class="t-title" x="{PAD["l"]}" y="46">{_esc(graph.topic)}</text>')
 
     # warm band over the last (boom) era
     if len(graph.eras) >= 2:
@@ -162,12 +163,13 @@ def render_figure1_svg(graph):
         })
 
     # footer chrome
-    nf = sum(1 for m in graph.milestones if m.branch == FOUND)
-    nb = len(graph.branches)
-    parts.append(f'<line class="fig-line" x1="{PAD["l"]}" y1="{H-46}" x2="{W-PAD["r"]}" y2="{H-46}" style="stroke-opacity:.4"/>')
-    parts.append(f'<text class="t-foot" x="{PAD["l"]}" y="{H-30}">FIG. 1 — METHOD EVOLUTION TIMELINE</text>')
-    parts.append(f'<text class="t-foot" x="{W-PAD["r"]}" y="{H-30}" text-anchor="end">'
-                 f'{len(graph.milestones)} MILESTONES · {nf} FOUNDATIONAL · {nb} LINEAGES</text>')
+    if not embed:
+        nf = sum(1 for m in graph.milestones if m.branch == FOUND)
+        nb = len(graph.branches)
+        parts.append(f'<line class="fig-line" x1="{PAD["l"]}" y1="{H-46}" x2="{W-PAD["r"]}" y2="{H-46}" style="stroke-opacity:.4"/>')
+        parts.append(f'<text class="t-foot" x="{PAD["l"]}" y="{H-30}">FIG. 1 — METHOD EVOLUTION TIMELINE</text>')
+        parts.append(f'<text class="t-foot" x="{W-PAD["r"]}" y="{H-30}" text-anchor="end">'
+                     f'{len(graph.milestones)} MILESTONES · {nf} FOUNDATIONAL · {nb} LINEAGES</text>')
 
     parts.append("</svg>")
     return "".join(parts), nodes_json
